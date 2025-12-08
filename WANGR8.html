@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>WANGR6 — v5.2 COMPLETE</title>
+<style>
+:root{
+ --bg:#0f0f10; --card:#1b1b1e; --muted:#bdbdbd;
+ --accent:#4fc3f7; --danger:#ff3b3b;
+ --card-pad:16px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#fff;font-family:"Microsoft JhengHei",Arial;-webkit-font-smoothing:antialiased;}
+#topbar{position:fixed;top:0;left:0;right:0;background:#161616;padding:12px 18px;display:flex;align-items:center;z-index:99;box-shadow:0 3px 10px rgba(0,0,0,0.6);}
+#nextbox{display:flex;flex-direction:column;}
+#top-name{font-size:18px;font-weight:700;color:#fff}
+#top-cd{color:var(--danger);font-weight:900;font-size:28px;margin-top:6px;}
+#controls{margin-left:auto;display:flex;gap:10px;align-items:center;}
+.container{max-width:1200px;margin:0 auto;padding:18px;padding-top:120px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px;}
+@media(max-width:1000px){.container{grid-template-columns:1fr;padding:14px;padding-top:160px}}
+.add-box{grid-column:1/-1;background:var(--card);padding:12px;border-radius:12px;border:1px solid #222;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.boss-card{background:#131313;border-radius:12px;padding:var(--card-pad);border:1px solid #232323;box-shadow:0 8px 22px #0008;display:flex;flex-direction:column;justify-content:space-between;min-height:210px;}
+.info-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+.info-top h2{margin:0;color:var(--accent);font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.info-lines{margin-top:8px;color:var(--muted);font-size:13px;line-height:1.6;}
+.next-respawn{color:var(--danger);font-size:18px;font-weight:900;}
+.countdown-card{color:#ddd;font-size:14px;}
+.btns-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;}
+.smallbtn{padding:8px 10px;border-radius:8px;border:none;cursor:pointer;font-weight:700;background:#2b2b2b;color:#fff;}
+.btn-add{background:#ff9800;color:#111;}
+.btn-kill{background:#4caf50;color:#fff;}
+.btn-del{background:#d9534f;color:#fff;}
+.manual-inline{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;}
+.input-small{background:#0b0b0b;border:1px solid #222;color:#fff;padding:6px;border-radius:6px;}
+.future{color:var(--muted);font-size:13px;margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.volume-control{display:flex;align-items:center;gap:8px;background:#101010;padding:6px;border-radius:8px;border:1px solid #222;}
+.footer-row{grid-column:1/-1;display:flex;gap:8px;align-items:center;justify-content:flex-end;color:var(--muted);font-size:13px;}
+.webhook-input{width:320px;max-width:40vw;}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#222;padding:10px 14px;border-radius:8px;border:1px solid #333;display:none;color:#fff;z-index:9999;}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div id="nextbox">
+    <div>下一個： <span id="top-name">載入中...</span></div>
+    <div id="top-cd">--:--</div>
+  </div>
+
+  <div id="controls">
+    <div class="volume-control"><span style="color:var(--muted);font-size:13px">音量</span><input id="volume" type="range" min="0" max="100" value="70" /></div>
+    <button class="smallbtn" id="unlockBtn">允許通知 + 啟用音效</button>
+    <button class="smallbtn" id="muteBtn">關閉通知/音效</button>
+    <button class="smallbtn" id="downloadBtn">下載 HTML</button>
+  </div>
+</div>
+
+<div class="container" id="container">
+  <div class="add-box">
+    <label style="color:var(--muted)">名稱：</label><input id="new-name" class="input-small" placeholder="例如：黑帝斯" />
+    <label style="color:var(--muted)">重生(分鐘)：</label><input id="new-respawn" class="input-small" type="number" min="1" style="width:110px" />
+    <button class="smallbtn btn-add" id="addBtn">新增王</button>
+
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+      <input id="webhook-url" class="input-small webhook-input" placeholder="可選：輸入 webhook URL (LINE Bot 等)" />
+      <button class="smallbtn" id="webhookTest">Webhook 測試</button>
+    </div>
+  </div>
+
+  <div class="footer-row">版本 v5.2 完整功能 — 本地單機使用 / 可放上 GitHub Pages</div>
+</div>
+
+<div id="toast" class="toast" aria-live="polite"></div>
+
+<script>
+/* v5.2 FULL — 修正手動時間跨日 bug 並整合完整功能 */
+/* Storage helpers */
+function lsGet(k,f){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):f;}catch(e){return f;} }
+function lsSet(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+
+/* initial bosses from user */
+let bosses = lsGet('boss_seq', [
+  {name:"火龍", respawn:180},
+  {name:"小吉", respawn:480},
+  {name:"海露拜", respawn:120},
+  {name:"巴陸德", respawn:120}
+]);
+
+let store = lsGet('boss_times', {});
+let audioCtx = null;
+let SOUND_ENABLED = true;
+let NOTIFY_ENABLED = true;
+
+function safeId(n){ return 'id_' + encodeURIComponent(n); }
+function toast(msg,ms=1800){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',ms); }
+
+/* WebAudio A */
+function ensureAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); else if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{}); }
+function playDing(vol=0.8,when=0){ try{ ensureAudio(); const ctx=audioCtx; const o=ctx.createOscillator(); const g=ctx.createGain(); o.type='sine'; o.frequency.value=1200; o.connect(g); g.connect(ctx.destination); const now=ctx.currentTime+when; g.gain.setValueAtTime(0.0001,now); g.gain.exponentialRampToValueAtTime(vol,now+0.005); g.gain.exponentialRampToValueAtTime(0.0001,now+0.6); o.start(now); o.stop(now+0.65);}catch(e){console.warn(e);} }
+function playSoon(vol=0.8){ playDing(vol,0.0); playDing(vol*0.9,0.35); playDing(vol*0.8,0.8); }
+function playAlert(vol=0.8){ playDing(vol,0.0); playDing(vol,0.25); playDing(vol,0.5); }
+
+/* unlock audio + notif */
+function unlockAudio(){
+  try{
+    ensureAudio();
+    const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); g.gain.value=0; o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.02);
+    if(Notification && Notification.requestPermission) Notification.requestPermission();
+    SOUND_ENABLED=true; NOTIFY_ENABLED=true;
+    toast('通知與音效已啟用');
+  }catch(e){ console.warn(e); toast('音效啟用失敗'); }
+}
+function disableNotify(){ SOUND_ENABLED=false; NOTIFY_ENABLED=false; toast('已關閉通知/音效'); }
+function vibrate(p){ try{ if(navigator.vibrate) navigator.vibrate(p);}catch(e){} }
+
+/* webhook test */
+document.getElementById('webhookTest').addEventListener('click', ()=>{
+  const url = document.getElementById('webhook-url').value.trim();
+  if(!url){ alert('請輸入 webhook URL'); return; }
+  fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({test:'ping', ts:new Date().toISOString()})})
+    .then(()=>toast('Webhook 已發送')).catch(()=>alert('Webhook 發送失敗'));
+});
+
+/* download HTML */
+document.getElementById('downloadBtn').addEventListener('click', ()=>{
+  const blob = new Blob([document.documentElement.outerHTML], {type:'text/html;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='WANGR6_v5.2_COMPLETE.html';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('已下載 HTML 檔');
+});
+
+/* DOM build */
+const container = document.getElementById('container');
+
+function createCard(b){
+  const card = document.createElement('div'); card.className='boss-card'; card.id=safeId(b.name);
+  // top
+  const top = document.createElement('div'); top.className='info-top';
+  const infoCol = document.createElement('div'); infoCol.style.flex='1';
+  const h2 = document.createElement('h2'); h2.textContent=b.name;
+  infoCol.appendChild(h2);
+  const right = document.createElement('div'); right.style.display='flex'; right.style.flexDirection='column'; right.style.alignItems='flex-end';
+  const del = document.createElement('button'); del.className='smallbtn btn-del'; del.textContent='刪除'; del.addEventListener('click', ()=> deleteBoss(b.name));
+  right.appendChild(del);
+  top.appendChild(infoCol); top.appendChild(right);
+
+  // lines
+  const lines = document.createElement('div'); lines.className='info-lines';
+  const last = document.createElement('div'); last.id='last-'+safeId(b.name); last.textContent='上次擊殺：--:--';
+  const next = document.createElement('div'); next.id='next-'+safeId(b.name);
+  const nextLabel = document.createElement('span'); nextLabel.innerText='下一次重生：';
+  const nextSpan = document.createElement('span'); nextSpan.className='next-respawn'; nextSpan.textContent='--:--';
+  next.appendChild(nextLabel); next.appendChild(nextSpan);
+  const cd = document.createElement('div'); cd.id='cd-'+safeId(b.name); cd.className='countdown-card'; cd.textContent='倒數：--:--';
+  lines.appendChild(last); lines.appendChild(next); lines.appendChild(cd);
+
+  // buttons
+  const btnRow = document.createElement('div'); btnRow.className='btns-row';
+  const kill = document.createElement('button'); kill.className='smallbtn btn-kill'; kill.textContent='已擊殺'; kill.addEventListener('click', ()=> killed(b.name, b.respawn));
+  btnRow.appendChild(kill);
+  [{t:'+1',v:1},{t:'-1',v:-1},{t:'+5',v:5},{t:'-5',v:-5}].forEach(o=>{
+    const btn=document.createElement('button'); btn.className='smallbtn'; btn.textContent=o.t;
+    btn.addEventListener('click', ()=> adjust(b.name,o.v));
+    btnRow.appendChild(btn);
+  });
+
+  // manual inline (fixed cross-day logic)
+  const manual = document.createElement('div'); manual.className='manual-inline';
+  const nowBtn = document.createElement('button'); nowBtn.className='smallbtn'; nowBtn.textContent='現在時間';
+  const hour = document.createElement('input'); hour.type='number'; hour.className='input-small'; hour.placeholder='時'; hour.min=0; hour.max=23; hour.style.width='64px';
+  const minute = document.createElement('input'); minute.type='number'; minute.className='input-small'; minute.placeholder='分'; minute.min=0; minute.max=59; minute.style.width='64px';
+  const apply = document.createElement('button'); apply.className='smallbtn'; apply.textContent='套用';
+
+  nowBtn.addEventListener('click', ()=>{
+    const d=new Date(); hour.value=String(d.getHours()).padStart(2,'0'); minute.value=String(d.getMinutes()).padStart(2,'0');
+  });
+
+  apply.addEventListener('click', ()=>{
+    const h = parseInt(hour.value,10); const m = parseInt(minute.value,10);
+    if(isNaN(h) || isNaN(m)){ alert('請輸入時與分或按現在時間'); return; }
+    // build a date on today's date at h:m
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+    // if that time is in the future -> it's from yesterday, move back one day
+    if(d.getTime() > now.getTime()) d.setDate(d.getDate()-1);
+    // store last kill and compute next
+    store[b.name + '_last'] = d.getTime();
+    store[b.name] = d.getTime() + b.respawn*60000;
+    store[b.name + '_notified'] = false;
+    store[b.name + '_3min'] = false;
+    lsSet('boss_times', store);
+    toast('已套用時間');
+  });
+
+  manual.appendChild(nowBtn); manual.appendChild(hour); manual.appendChild(minute); manual.appendChild(apply);
+
+  // future
+  const future = document.createElement('div'); future.className='future'; future.id='future-'+safeId(b.name); future.textContent='未來：--';
+
+  card.appendChild(top); card.appendChild(lines); card.appendChild(btnRow); card.appendChild(manual); card.appendChild(future);
+  return card;
+}
+
+function renderAll(){
+  document.querySelectorAll('.boss-card').forEach(e=>e.remove());
+  const footer = document.querySelector('.footer-row');
+  bosses.forEach(b=>{
+    const c = createCard(b);
+    footer.parentNode.insertBefore(c, footer);
+  });
+}
+
+/* CRUD */
+function addBoss(){
+  const name = document.getElementById('new-name').value.trim();
+  const resp = parseInt(document.getElementById('new-respawn').value,10);
+  if(!name || !resp){ alert('請輸入名稱與重生時間'); return; }
+  if(bosses.find(x=>x.name===name)){ alert('名稱已存在'); return; }
+  bosses.push({name:name, respawn:resp});
+  lsSet('boss_seq', bosses);
+  store[name] = Date.now();
+  store[name + '_last'] = Date.now();
+  store[name + '_notified'] = false;
+  store[name + '_3min'] = false;
+  lsSet('boss_times', store);
+  document.getElementById('new-name').value=''; document.getElementById('new-respawn').value='';
+  renderAll();
+}
+
+function deleteBoss(name){
+  if(!confirm('確定刪除 '+name+' ?')) return;
+  bosses = bosses.filter(b=>b.name!==name);
+  lsSet('boss_seq', bosses);
+  delete store[name]; delete store[name + '_last']; delete store[name + '_notified']; delete store[name + '_3min'];
+  lsSet('boss_times', store);
+  renderAll();
+}
+
+function adjust(name, min){
+  if(!store[name]) store[name] = Date.now();
+  store[name] += min*60000;
+  store[name + '_notified'] = false; store[name + '_3min'] = false;
+  lsSet('boss_times', store);
+}
+
+function killed(name, resp){
+  const now = Date.now();
+  store[name + '_last'] = now;
+  store[name] = now + resp*60000;
+  store[name + '_notified'] = false; store[name + '_3min'] = false;
+  lsSet('boss_times', store);
+}
+
+/* format */
+function fmtTime(ms){ const d=new Date(ms); return d.toLocaleTimeString('zh-TW',{hour12:false}); }
+
+/* main loop */
+function updateLoop(){
+  let soon=null;
+  const vol = document.getElementById('volume').value/100;
+  bosses.forEach(b=>{
+    if(!store[b.name]) store[b.name] = Date.now() + b.respawn*60000;
+    if(!store[b.name + '_last']) store[b.name + '_last'] = Date.now();
+    if(store[b.name + '_notified'] === undefined) store[b.name + '_notified'] = false;
+    if(store[b.name + '_3min'] === undefined) store[b.name + '_3min'] = false;
+
+    let next = store[b.name];
+    // roll forward until in future
+    while(next < Date.now()){
+      next += b.respawn*60000;
+      store[b.name + '_notified'] = false;
+      store[b.name + '_3min'] = false;
+    }
+    store[b.name] = next;
+    lsSet('boss_times', store);
+
+    const lastMs = store[b.name + '_last'] || (next - b.respawn*60000);
+    let diff = Math.max(0, next - Date.now());
+
+    // 3-min warning
+    if(diff <= 180000 && !store[b.name + '_3min']){
+      store[b.name + '_3min'] = true; lsSet('boss_times', store);
+      if(SOUND_ENABLED) playSoon(vol);
+      if(NOTIFY_ENABLED && Notification.permission==='granted') new Notification(b.name + ' 3 分鐘後刷新！');
+      const url = document.getElementById('webhook-url').value.trim();
+      if(url) fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event:'3min',boss:b.name,next:new Date(next).toISOString()})}).catch(()=>{});
+    }
+
+    // refresh
+    if(diff <= 1000 && !store[b.name + '_notified']){
+      store[b.name + '_notified'] = true; lsSet('boss_times', store);
+      if(SOUND_ENABLED) playAlert(vol);
+      if(NOTIFY_ENABLED && Notification.permission==='granted') new Notification(b.name + ' 已刷新！');
+      const url = document.getElementById('webhook-url').value.trim();
+      if(url) fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event:'refresh',boss:b.name,next:new Date(next).toISOString()})}).catch(()=>{});
+    }
+
+    // update UI
+    const lastEl = document.getElementById('last-'+safeId(b.name));
+    const nextEl = document.getElementById('next-'+safeId(b.name));
+    const cdEl = document.getElementById('cd-'+safeId(b.name));
+    const futEl = document.getElementById('future-'+safeId(b.name));
+    if(lastEl) lastEl.textContent = '上次擊殺：' + fmtTime(lastMs);
+    if(nextEl){
+      const nr = nextEl.querySelector('.next-respawn');
+      if(nr) nr.textContent = fmtTime(next);
+    }
+    if(cdEl) cdEl.textContent = '倒數：' + Math.floor(diff/60000) + '分 ' + Math.floor((diff%60000)/1000) + '秒';
+    if(futEl){
+      const arr=[];
+      for(let i=1;i<=3;i++) arr.push(fmtTime(next + b.respawn*i*60000));
+      futEl.textContent = '未來：' + arr.join('、');
+    }
+    if(!soon || next < soon.time) soon={name:b.name,time:next,diff};
+  });
+
+  if(soon){
+    document.getElementById('top-name').textContent = soon.name;
+    document.getElementById('top-cd').textContent = Math.floor(soon.diff/60000) + '分 ' + Math.floor((soon.diff%60000)/1000) + '秒';
+  }
+}
+
+/* init */
+function init(){
+  bosses.forEach(b=>{
+    if(!store[b.name]) store[b.name] = Date.now() + b.respawn*60000;
+    if(!store[b.name + '_last']) store[b.name + '_last'] = Date.now();
+    if(store[b.name + '_notified']===undefined) store[b.name + '_notified'] = false;
+    if(store[b.name + '_3min']===undefined) store[b.name + '_3min'] = false;
+  });
+  lsSet('boss_seq', bosses);
+  lsSet('boss_times', store);
+  renderAll();
+}
+
+/* bindings */
+document.getElementById('addBtn').addEventListener('click', addBoss);
+document.getElementById('unlockBtn').addEventListener('click', unlockAudio);
+document.getElementById('muteBtn').addEventListener('click', disableNotify);
+
+init();
+setInterval(updateLoop,500);
+updateLoop();
+
+</script>
+</body>
+</html>
