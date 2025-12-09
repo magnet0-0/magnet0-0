@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<title>WANGR10 完整同步版</title>
+<style>
+body{background:#111;color:#fff;font-family:Microsoft JhengHei;padding:20px;font-size:20px;}
+.card{background:#222;padding:15px;border-radius:10px;margin:10px 0;border:1px solid #333;}
+button{font-size:18px;padding:6px 12px;margin-left:5px;}
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+
+<script>
+// firebaseConfig
+const firebaseConfig = {
+  apiKey: "AIzaSyDs9i1UKuvUohyE2dYQYk6nSBXHrvTvzEM",
+  authDomain: "wangr-sync2.firebaseapp.com",
+  projectId: "wangr-sync2",
+  storageBucket: "wangr-sync2.firebasestorage.app",
+  messagingSenderId: "1010873667172",
+  appId: "1:1010873667172:web:ba68012141814fed241971"
+};
+
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+function fmt(t){
+  const h = String(Math.floor(t/60)).padStart(2,"0");
+  const m = String(t%60).padStart(2,"0");
+  return `${h}:${m}`;
+}
+
+async function updateKill(name, killtime){
+  const nowMin = Math.floor(Date.now()/60000);
+  await db.collection("bosses").doc(name).update({
+    lastkill: nowMin
+  });
+  alert(name+" 已擊殺並同步！");
+}
+
+window.onload = () =>{
+  const container = document.getElementById("bossList");
+
+  db.collection("bosses").onSnapshot(snap=>{
+    container.innerHTML = "";
+    snap.forEach(doc=>{
+      const b = doc.data();
+      const id = doc.id;
+
+      const last = b.lastkill===0 ? "尚未擊殺" : fmt(b.lastkill);
+
+      let div=document.createElement("div");
+      div.className="card";
+      div.innerHTML = `
+        <div><b>${b.name}</b></div>
+        <div>重生：${b.respawn} 分</div>
+        <div>擊殺耗時：${b.killtime} 分</div>
+        <div>上次擊殺：${last}</div>
+        <button onclick="updateKill('${id}',${b.killtime})">已擊殺</button>
+      `;
+
+      container.appendChild(div);
+    });
+  });
+};
+</script>
+</head>
+
+<body>
+<h1>🔥 WANGR10 — 完整同步基礎版</h1>
+<p>（擊殺、時間自動同步，可擴充倒數/提醒/循環）</p>
+<div id="bossList">讀取中…</div>
+
+</body>
+</html>
