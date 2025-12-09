@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>WANGR12 PRO v7 — FINAL (no title)</title>
+<style>
+:root{--bg:#0f0f10;--card:#1a1a1c;--muted:#bdbdbd;--accent:#ffb200;--danger:#e53935;--green:#28a745;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#ddd;font-family:"Microsoft JhengHei",Arial,Helvetica,sans-serif;}
+.topbar{background:#0b0b0c;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 16px rgba(0,0,0,.6);position:sticky;top:0;z-index:50;height:64px;}
+.next-left{display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+.next-label{color:#fff;font-size:14px;}
+.next-count{color:var(--danger);font-weight:900;font-size:34px;}
+.top-right{display:flex;align-items:center;gap:18px;}
+.controls{display:flex;align-items:center;gap:10px;}
+.slider{width:180px}
+.container{max-width:1200px;margin:20px auto;padding:0 18px;}
+.panel{background:var(--card);border-radius:12px;padding:18px;margin-bottom:20px;box-shadow:0 8px 24px rgba(0,0,0,.6);}
+.row{display:flex;gap:12px;align-items:center;margin-bottom:10px;}
+.input{background:#0b0b0c;border:1px solid #222;padding:8px 10px;border-radius:8px;color:#ddd}
+.input.small{width:80px}
+.btn{background:#2f2f2f;color:#fff;border-radius:8px;padding:8px 12px;border:0;cursor:pointer}
+.btn.orange{background:var(--accent);color:#111;font-weight:800}
+.btn.green{background:var(--green);color:#fff;font-weight:700;border-radius:10px;padding:8px 14px}
+.btn.red{background:var(--danger);color:#fff;font-weight:700;border-radius:10px;padding:8px 14px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-top:16px}
+.boss-card{background:#121213;border-radius:12px;padding:18px;min-height:180px;position:relative;box-shadow:inset 0 -2px 0 rgba(0,0,0,.2)}
+.boss-title{color:#32b7ff;font-weight:800;font-size:20px;margin-bottom:6px}
+.info{color:#d6d6d6;margin:6px 0}
+.next-time{color:var(--danger);font-weight:900;font-size:20px}
+.countdown{font-weight:900;color:#fff;font-size:18px}
+.controls-inline{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.smallbtn{background:#2b2b2b;border-radius:8px;padding:8px 10px;color:#fff;border:0;cursor:pointer}
+.pale{background:#222;padding:6px 8px;border-radius:8px;color:#ddd}
+.future{color:#c9c9c9;margin-top:12px}
+.lastmod{color:#bdbdbd;margin-top:8px;font-size:13px}
+.footer-note{color:var(--muted);margin-top:8px}
+.manual-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+@media(max-width:900px){.grid{grid-template-columns:1fr} .next-count{font-size:28px}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="next-left" style="margin-left:6px;">
+    <div class="next-label">下一個： <span id="topName">載入中...</span></div>
+    <div id="topCd" class="next-count">--:--:--</div>
+  </div>
+  <div class="top-right">
+    <div class="controls">
+      <label style="margin-right:6px">音量</label>
+      <input id="vol" class="slider" type="range" min="0" max="1" step="0.01" value="0.8"/>
+      <button id="allowNotif" class="btn">允許通知＋啟用音效</button>
+      <button id="muteAll" class="btn">關閉通知/音效</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="panel">
+    <div style="color:#fff;margin-bottom:6px">資料來源： Firestore 集合 /bosses （Document ID 使用王名） | 初始化中...</div>
+    <div class="row">
+      名稱： <input id="newName" class="input" placeholder="例如：火龍"/>
+      重生(分)： <input id="newRespawn" class="input small" value="120"/>
+      擊殺耗時(分)： <input id="newKill" class="input small" value="1"/>
+      <button id="addBtn" class="btn orange">新增王</button>
+    </div>
+    <div class="footer-note">說明：新增會直接寫入 Firestore（依 /bosses 文件順序顯示，不會自動排序）。</div>
+  </div>
+
+  <div id="grid" class="grid"></div>
+
+  <div class="panel">
+    <div class="footer-note">歷史紀錄（本機 + Firestore）</div>
+    <div id="history" class="footer-note">尚無歷史紀錄</div>
+  </div>
+</div>
+
+<!-- Firebase compat CDN -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+<script>
+/* ==================== CONFIG (hard-coded A = YES) ==================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyDs9i1UKuvUohyE2dYQYk6nSBXHrvTvzEM",
+  authDomain: "wangr-sync2.firebaseapp.com",
+  projectId: "wangr-sync2",
+  storageBucket: "wangr-sync2.firebasestorage.app",
+  messagingSenderId: "1010873667172",
+  appId: "1:1010873667172:web:ba68012141814fed241971"
+};
+/* =================================================================== */
+
+// init Firebase compat
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// state
+let bosses = {}; // doc data keyed by doc id (name)
+let unsub = null;
+let notified3 = {}; // per boss flag for 3min beep
+let notifiedDone = {}; // per boss flag for refresh beep
+
+// audio context
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioContext();
+let masterVol = 0.8;
+
+// helpers
+const $ = id => document.getElementById(id);
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmtTime(ms){ if(!ms) return '--:--:--'; const d=new Date(ms); return d.toLocaleTimeString('zh-TW',{hour12:false}); }
+function msToHMS(ms){ if(ms===Infinity) return '--:--:--'; if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000); const h=Math.floor(s/3600); const m=Math.floor((s%3600)/60); const sec=s%60; return pad(h)+':'+pad(m)+':'+pad(sec); }
+function nowMs(){ return Date.now(); }
+
+// create beep
+function beep(freq=880, dur=120, vol=0.7){
+  try{
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type='sine'; o.frequency.value = freq;
+    g.gain.value = vol * masterVol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    setTimeout(()=>{ o.stop(); }, dur);
+  }catch(e){ console.warn('audio err',e); }
+}
+// play n beeps (gap ms)
+function playPattern(n,gap=200,tone=140){
+  let i=0;
+  const run = ()=>{
+    if(i>=n) return;
+    beep(880,tone,0.9);
+    if(navigator.vibrate) navigator.vibrate(80);
+    i++;
+    setTimeout(run,gap);
+  };
+  run();
+}
+
+// UI render
+function render(){
+  const grid = $('grid'); grid.innerHTML='';
+  const names = Object.keys(bosses);
+  // compute top next by remaining ms
+  let top=null; let topRem=Infinity;
+  names.forEach(n=>{ const rem = remainingMs(bosses[n]); if(rem < topRem){ topRem=rem; top=n; } });
+  $('topName').textContent = top ? top : '—';
+  $('topCd').textContent = topRem===Infinity ? '--:--:--' : msToHMS(topRem);
+
+  names.forEach(name=>{
+    const doc = bosses[name];
+    const card = document.createElement('div'); card.className='boss-card';
+    const title = document.createElement('div'); title.className='boss-title'; title.textContent = name; card.appendChild(title);
+
+    const last = document.createElement('div'); last.className='info'; last.textContent = '上次擊殺： ' + (doc.lastkill? fmtTime(doc.lastkill): '--:--:--'); card.appendChild(last);
+
+    const nextTs = computeNext(doc);
+    const nxt = document.createElement('div'); nxt.innerHTML = '下一次重生： <span class="next-time">' + (nextTs? fmtTime(nextTs): '--:--:--') + '</span>'; card.appendChild(nxt);
+
+    const rem = remainingMs(doc);
+    const remEl = document.createElement('div'); remEl.className='info'; remEl.innerHTML = '倒數： <span class="countdown">' + (rem===Infinity? '--:--:--' : msToHMS(rem)) + '</span>'; card.appendChild(remEl);
+
+    const controls = document.createElement('div'); controls.className='controls-inline';
+    const killBtn = document.createElement('button'); killBtn.className='btn green'; killBtn.textContent='已擊殺 (完成)';
+    killBtn.onclick = ()=> markKilled(name);
+    controls.appendChild(killBtn);
+
+    ['+1','-1','+5','-5'].forEach(txt=>{
+      const b=document.createElement('button'); b.className='smallbtn'; b.textContent=txt;
+      b.onclick = ()=> adjustMinutes(name,parseInt(txt));
+      controls.appendChild(b);
+    });
+    const del=document.createElement('button'); del.className='btn red'; del.textContent='刪除'; del.onclick=()=> deleteBoss(name);
+    controls.appendChild(del);
+    card.appendChild(controls);
+
+    // killtime controls
+    const kt = document.createElement('div'); kt.className='info'; kt.innerHTML = '擊殺耗時： <strong id="kt-'+name+'">'+(doc.killtime||0)+'</strong> 分 ';
+    const kmin=document.createElement('button'); kmin.className='smallbtn'; kmin.textContent='-1'; kmin.onclick=()=> adjustKilltime(name,-1);
+    const kplus=document.createElement('button'); kplus.className='smallbtn'; kplus.textContent='+1'; kplus.onclick=()=> adjustKilltime(name,1);
+    kt.appendChild(kmin); kt.appendChild(kplus);
+    card.appendChild(kt);
+
+    // manual now inputs hh mm ss
+    const manual = document.createElement('div'); manual.className='manual-row';
+    const nowBtn=document.createElement('button'); nowBtn.className='smallbtn'; nowBtn.textContent='現在(完成)'; nowBtn.onclick=()=>{ const d=new Date(); hh.value=d.getHours(); mm.value=d.getMinutes(); ss.value=d.getSeconds(); };
+    const hh=document.createElement('input'); hh.className='input small'; hh.placeholder='時';
+    const mm=document.createElement('input'); mm.className='input small'; mm.placeholder='分';
+    const ss=document.createElement('input'); ss.className='input small'; ss.placeholder='秒';
+    const apply=document.createElement('button'); apply.className='btn'; apply.textContent='套用'; apply.onclick=()=> applyManual(name,hh.value,mm.value,ss.value);
+    manual.appendChild(nowBtn); manual.appendChild(hh); manual.appendChild(mm); manual.appendChild(ss); manual.appendChild(apply);
+    card.appendChild(manual);
+
+    const future=document.createElement('div'); future.className='future';
+    if(nextTs){
+      const arr=[];
+      for(let k=0;k<4;k++){ arr.push(fmtTime(nextTs + k*(doc.respawn||0)*60000)); }
+      future.textContent = '未來： ' + arr.join(' ・ ');
+    } else future.textContent='未來： --';
+    card.appendChild(future);
+
+    const lastmod=document.createElement('div'); lastmod.className='lastmod'; lastmod.textContent = '最後修改(LastKill)： ' + (doc.lastkill? fmtTime(doc.lastkill):'--:--:--');
+    card.appendChild(lastmod);
+
+    grid.appendChild(card);
+  });
+}
+
+// compute next and remaining
+function computeNext(doc){
+  if(!doc.lastkill || doc.lastkill===0) return null;
+  return doc.lastkill + (doc.respawn||0)*60000;
+}
+function remainingMs(doc){
+  const nxt = computeNext(doc);
+  if(!nxt) return Infinity;
+  return nxt - Date.now();
+}
+
+// Firestore write helper
+async function writeMerge(id,data){ await db.collection('bosses').doc(id).set(data,{merge:true}); }
+
+// actions
+async function markKilled(name){
+  const doc = bosses[name];
+  const kt = Number(doc.killtime||0);
+  const finish = Date.now() + (kt*60000);
+  try{ await writeMerge(name,{ lastkill: finish }); alert('已記錄完成時間'); }
+  catch(e){ alert('寫入失敗：'+e.message); }
+}
+async function applyManual(name,hh,mm,ss){
+  const H=parseInt(hh,10), M=parseInt(mm,10), S=parseInt(ss,10);
+  if(isNaN(H)||isNaN(M)||isNaN(S)){ alert('請輸入時/分/秒或按現在(完成)'); return; }
+  const now=new Date();
+  const dt=new Date(now.getFullYear(),now.getMonth(),now.getDate(),H,M,S,0);
+  try{ await writeMerge(name,{ lastkill: dt.getTime() }); alert('已套用完成時間'); }
+  catch(e){ alert('寫入失敗：'+e.message); }
+}
+async function adjustMinutes(name,delta){
+  const doc=bosses[name];
+  const base = doc.lastkill || Date.now();
+  const newLast = base + delta*60000;
+  try{ await writeMerge(name,{ lastkill:newLast }); alert('已修改時間'); }
+  catch(e){ alert('寫入失敗：'+e.message); }
+}
+async function adjustKilltime(name,delta){
+  const doc=bosses[name];
+  const newKt = Math.max(0, (doc.killtime||0)+delta);
+  try{ await writeMerge(name,{ killtime:newKt }); alert('已修改擊殺耗時'); }
+  catch(e){ alert('寫入失敗：'+e.message); }
+}
+async function deleteBoss(name){
+  if(!confirm('確認刪除 '+name+' 嗎？')) return;
+  try{ await db.collection('bosses').doc(name).delete(); alert('已刪除'); }
+  catch(e){ alert('刪除失敗：'+e.message); }
+}
+
+// add new boss
+$('addBtn').addEventListener('click', async ()=>{
+  const n=$('newName').value.trim(); const r=parseInt($('newRespawn').value)||120; const k=parseInt($('newKill').value)||1;
+  if(!n){ alert('請輸入名稱'); return; }
+  try{ await db.collection('bosses').doc(n).set({ name:n, respawn:r, killtime:k, lastkill:0 }); $('newName').value=''; alert('新增完成'); }
+  catch(e){ alert('新增失敗:'+e.message); }
+});
+
+// realtime listener (no explicit order - uses Firestore returned order)
+function startListener(){
+  if(unsub) unsub();
+  unsub = db.collection('bosses').onSnapshot(snap=>{
+    const obj={};
+    snap.docs.forEach(d=>{
+      const data=d.data();
+      obj[d.id] = {
+        name: data.name || d.id,
+        respawn: data.respawn || 0,
+        killtime: data.killtime || 0,
+        lastkill: data.lastkill || 0
+      };
+    });
+    bosses = obj;
+    // ensure notify flags exist
+    Object.keys(bosses).forEach(n=>{ if(!(n in notified3)) notified3[n]=false; if(!(n in notifiedDone)) notifiedDone[n]=false; });
+    render();
+  }, err=>{ console.error(err); alert('Firestore snapshot 錯誤：'+err.message); });
+}
+
+// periodic scheduler: update countdowns and play notifications
+setInterval(()=>{
+  Object.keys(bosses).forEach(name=>{
+    const doc=bosses[name];
+    const rem = remainingMs(doc);
+    if(rem<=180000 && rem>0 && !notified3[name]){ // 3min before
+      playPattern(3,240,140); notified3[name]=true;
+    }
+    if(rem<=0 && !notifiedDone[name]){ // reached
+      playPattern(5,160,100); notifiedDone[name]=true;
+      if(navigator.vibrate) navigator.vibrate([200,100,200]);
+    }
+  });
+  // re-render countdowns in UI
+  const cds = document.querySelectorAll('.countdown');
+  if(cds.length) render();
+},1000);
+
+// volume control and notifications
+$('vol').addEventListener('input', e=>{ masterVol = parseFloat(e.target.value); });
+$('allowNotif').addEventListener('click', async ()=>{
+  if(window.Notification && Notification.permission!=='granted'){ await Notification.requestPermission(); }
+  try{ await audioCtx.resume(); alert('通知/聲效已啟用'); }catch(e){ alert('無法啟用音效'); }
+});
+$('muteAll').addEventListener('click', ()=>{ masterVol=0; $('vol').value=0; alert('聲效已關閉'); });
+
+// start
+startListener();
+
+</script>
+</body>
+</html>
