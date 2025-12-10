@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>WANGR12 PRO v7.3 — FINAL</title>
+<style>
+:root{--bg:#0f0f10;--card:#1a1a1c;--muted:#bdbdbd;--accent:#ffb200;--danger:#e53935;--green:#28a745;--text:#e8e8e8;}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#0b0b0d 0%,#0f0f12 100%);color:var(--text);font-family:"Microsoft JhengHei","Noto Sans TC",Helvetica,Arial,sans-serif;}
+.topbar{position:fixed;top:0;left:0;right:0;z-index:999;background:rgba(11,11,12,0.98);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.03)}
+.next-left{display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+.next-label{color:#fff;font-size:16px;}
+.next-name{font-size:32px;font-weight:900;color:#fff;line-height:1;}
+.next-count{color:var(--danger);font-weight:900;font-size:48px;margin-top:6px;}
+.top-right{display:flex;align-items:center;gap:12px;}
+.slider{width:200px}
+.container{max-width:1200px;margin:18px auto;padding:0 16px;}
+.panel{background:var(--card);border-radius:12px;padding:14px;margin-bottom:16px;box-shadow:0 8px 30px rgba(0,0,0,0.6);}
+.row{display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.input{background:#0b0b0c;border:1px solid #222;padding:8px 10px;border-radius:8px;color:var(--text);outline:none}
+.input.small{width:80px}
+.btn{background:#2f2f2f;color:#fff;border-radius:8px;padding:8px 12px;border:0;cursor:pointer}
+.btn.orange{background:var(--accent);color:#111;font-weight:800}
+.btn.green{background:var(--green);color:#fff;font-weight:800;border-radius:10px;padding:8px 14px}
+.btn.red{background:var(--danger);color:#fff;font-weight:800;border-radius:10px;padding:8px 14px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:14px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.boss-card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:14px;min-height:160px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.02)}
+.boss-title{color:#32b7ff;font-weight:800;font-size:18px;margin-bottom:6px}
+.info{color:#d6d6d6;margin:6px 0;font-size:14px}
+.next-time{color:var(--danger);font-weight:900;font-size:18px}
+.countdown{font-weight:900;color:#fff;font-size:16px}
+.controls-inline{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.smallbtn{background:#2b2b2b;border-radius:8px;padding:8px 10px;color:#fff;border:0;cursor:pointer}
+.future{color:#c9c9c9;margin-top:12px;font-size:13px}
+.lastmod{color:#bdbdbd;margin-top:8px;font-size:13px}
+.manual-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.footer-note{color:var(--muted);margin-top:8px}
+.input[type=number]{-moz-appearance:textfield}
+</style>
+</head>
+<body>
+<div class="topbar" id="topbar">
+  <div class="next-left">
+    <div class="next-label">下一個：</div>
+    <div id="topName" class="next-name">載入中...</div>
+    <div id="topCd" class="next-count">--:--:--</div>
+  </div>
+  <div class="top-right">
+    <label style="font-size:13px;color:#ccc;margin-right:6px">音量</label>
+    <input id="vol" class="slider" type="range" min="0" max="1" step="0.01" value="0.8"/>
+    <button id="allowNotif" class="btn">允許通知＋啟用音效</button>
+    <button id="muteAll" class="btn">關閉通知/音效</button>
+  </div>
+</div>
+
+<!-- spacer so content not hidden by fixed header -->
+<div style="height:120px"></div>
+
+<div class="container" id="app">
+  <div class="panel">
+    <div style="color:#fff;margin-bottom:8px">資料來源： Firestore 集合 <code>/bosses</code></div>
+    <div class="row">
+      名稱： <input id="newName" class="input" placeholder="例如：火龍"/>
+      重生(分)： <input id="newRespawn" class="input small" type="number" value="120"/>
+      擊殺耗時(分)： <input id="newKill" class="input small" type="number" value="1"/>
+      <button id="addBtn" class="btn orange">新增王</button>
+    </div>
+    <div class="footer-note">新增會寫入 Firestore；顯示順序依 Firestore 回傳（不排序）。</div>
+  </div>
+
+  <div id="grid" class="grid" aria-live="polite"></div>
+
+  <div class="panel">
+    <div class="footer-note">歷史紀錄（簡要）：</div>
+    <div id="history">尚無歷史紀錄</div>
+  </div>
+</div>
+
+<!-- Firebase compat -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+<script>
+/* WANGR12 PRO v7.3 FINAL JS
+   Rules implemented as confirmed:
+   - At spawn time (nextSpawn), system will set lastkill = nextSpawn + killtime (simulate kill after killtime).
+   - Next spawn for display/ countdown is computed from lastkill + respawn.
+   - Future preview shows nextSpawn + i*(respawn + killtime).
+   - Manual '已擊殺' sets lastkill to now; manual input sets lastkill to entered time.
+*/
+
+// CONFIG (hard-coded A = YES)
+const firebaseConfig = {
+  apiKey: "AIzaSyDs9i1UKuvUohyE2dYQYk6nSBXHrvTvzEM",
+  authDomain: "wangr-sync2.firebaseapp.com",
+  projectId: "wangr-sync2",
+  storageBucket: "wangr-sync2.firebasestorage.app",
+  messagingSenderId: "1010873667172",
+  appId: "1:1010873667172:web:ba68012141814fed241971"
+};
+if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// state
+const bosses = {};
+const cardEls = {};
+let unsub = null;
+let notified3 = {};
+let notifiedDone = {};
+
+// --- localStorage notify helpers (per-device, independent) ---
+function getNotifyKey(id){ return 'notify_' + id; }
+function readLocalNotify(id){
+  try{
+    const v = localStorage.getItem(getNotifyKey(id));
+    if(v === null) return true; // default ON
+    return v === '1';
+  }catch(e){ return true; }
+}
+function writeLocalNotify(id, val){
+  try{ localStorage.setItem(getNotifyKey(id), val ? '1' : '0'); }catch(e){}
+}
+// --- end local helpers ---
+
+
+let masterVol = 0.8;
+
+// audio
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioCtx();
+function beep(freq=880,dur=120,vol=0.9){ try{ const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type='sine'; o.frequency.value=freq; g.gain.value=vol*masterVol; o.connect(g); g.connect(audioCtx.destination); o.start(); setTimeout(()=>o.stop(),dur);}catch(e){console.warn(e)} }
+function playPattern(n,gap=220,tone=140){ let i=0; const run=()=>{ if(i>=n) return; beep(880,tone,0.95); if(navigator.vibrate) navigator.vibrate(90); i++; setTimeout(run,gap); }; run(); }
+
+// helpers
+const $ = id => document.getElementById(id);
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmtTime(ms){ if(!ms) return '--:--:--'; return new Date(ms).toLocaleTimeString('zh-TW',{hour12:false}); }
+function msToHMS(ms){ if(ms===Infinity) return '--:--:--'; if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000); const h=Math.floor(s/3600); const m=Math.floor((s%3600)/60); const sec=s%60; return pad(h)+':'+pad(m)+':'+pad(sec); }
+function nowMs(){ return Date.now(); }
+
+// compute next spawn using lastkill primarily
+function computeNext(doc){
+  const lk = Number(doc.lastkill||0);
+  if(lk && lk>0){
+    return lk + Number(doc.respawn||0)*60000;
+  }
+  const ls = Number(doc.lastspawn||0);
+  if(ls && ls>0) return ls + Number(doc.respawn||0)*60000;
+  return null;
+}
+function remainingMs(doc){
+  const nxt = computeNext(doc);
+  if(!nxt) return Infinity;
+  return nxt - Date.now();
+}
+
+// create/update card (preserve manual inputs)
+function createOrUpdateCard(id, data){
+  if(cardEls[id]){
+    cardEls[id].data = data;
+    cardEls[id].lastEl.textContent = '上次擊殺： ' + (data.lastkill? fmtTime(data.lastkill): '--:--:--');
+    cardEls[id].ktEl.textContent = data.killtime || 0;
+    cardEls[id].lastmod.textContent = '最後修改(LastKill)： ' + (data.lastkill? fmtTime(data.lastkill): '--:--:--');
+    // update notify icon color/state if exists
+    if(cardEls[id].notifyBtn){ const nb = cardEls[id].notifyBtn; const localv = readLocalNotify(id); const state = (typeof localv === 'undefined') ? Boolean(data.notify) : localv; nb.textContent = state ? '🔔' : '🔕'; if(state){ nb.style.color='#FFD700'; nb.style.opacity='1'; } else { nb.style.color='#555'; nb.style.opacity='0.6'; } }
+    updateFutureDisplay(id);
+    return;
+  }
+
+  // Build card DOM
+  const card = document.createElement('div'); card.className='boss-card';
+  // notify icon (right-top)
+  const notifyBtn = document.createElement('button'); notifyBtn.className='smallbtn'; notifyBtn.style.position='absolute'; notifyBtn.style.top='8px'; notifyBtn.style.right='8px'; notifyBtn.title='切換提醒';
+
+  const title = document.createElement('div'); title.className='boss-title'; title.textContent = id;
+  const last = document.createElement('div'); last.className='info'; last.textContent = '上次擊殺： ' + (data.lastkill? fmtTime(data.lastkill): '--:--:--');
+  const nextEl = document.createElement('div'); nextEl.innerHTML = '下一次重生： <span class="next-time">' + (computeNext(data)? fmtTime(computeNext(data)) : '--:--:--') + '</span>';
+  const countdownEl = document.createElement('div'); countdownEl.className = 'info'; countdownEl.innerHTML = '倒數： <span class="countdown">' + (computeNext(data)? msToHMS(remainingMs(data)) : '--:--:--') + '</span>';
+  // controls
+  const controls = document.createElement('div'); controls.className='controls-inline';
+  const killBtn = document.createElement('button'); killBtn.className='btn green'; killBtn.textContent='已擊殺 (完成)'; killBtn.addEventListener('click', ()=> markKilled(id));
+  controls.appendChild(killBtn);
+  ['+1','-1','+5','-5'].forEach(txt=>{ const b=document.createElement('button'); b.className='smallbtn'; b.textContent=txt; b.addEventListener('click', ()=> adjustMinutes(id, parseInt(txt))); controls.appendChild(b); });
+  const del = document.createElement('button'); del.className='btn red'; del.textContent='刪除'; del.addEventListener('click', ()=> deleteBoss(id)); controls.appendChild(del);
+  // killtime controls
+  const kt = document.createElement('div'); kt.className='info'; kt.innerHTML = '擊殺耗時： <strong id="kt-'+id+'">' + (data.killtime||0) + '</strong> 分 ';
+  const kmin = document.createElement('button'); kmin.className='smallbtn'; kmin.textContent='-1'; kmin.addEventListener('click', ()=> adjustKilltime(id,-1));
+  const kplus = document.createElement('button'); kplus.className='smallbtn'; kplus.textContent='+1'; kplus.addEventListener('click', ()=> adjustKilltime(id,1));
+  kt.appendChild(kmin); kt.appendChild(kplus);
+  // manual inputs (preserved)
+  const manual = document.createElement('div'); manual.className='manual-row';
+  const nowBtn = document.createElement('button'); nowBtn.className='smallbtn'; nowBtn.textContent='現在(完成)';
+  const hh = document.createElement('input'); hh.className='input small'; hh.placeholder='時'; hh.type='number'; hh.min=0; hh.max=23;
+  const mm = document.createElement('input'); mm.className='input small'; mm.placeholder='分'; mm.type='number'; mm.min=0; mm.max=59;
+  const ss = document.createElement('input'); ss.className='input small'; ss.placeholder='秒'; ss.type='number'; ss.min=0; ss.max=59;
+  const apply = document.createElement('button'); apply.className='btn'; apply.textContent='套用';
+  nowBtn.addEventListener('click', ()=>{ const d=new Date(); hh.value=d.getHours(); mm.value=d.getMinutes(); ss.value=d.getSeconds(); });
+  apply.addEventListener('click', ()=> applyManual(id, hh.value, mm.value, ss.value));
+  manual.appendChild(nowBtn); manual.appendChild(hh); manual.appendChild(mm); manual.appendChild(ss); manual.appendChild(apply);
+  // future and lastmod
+  const future = document.createElement('div'); future.className='future';
+  const lastmod = document.createElement('div'); lastmod.className='lastmod'; lastmod.textContent = '最後修改(LastKill)： ' + (data.lastkill? fmtTime(data.lastkill): '--:--:--');
+  // assemble
+  card.appendChild(title); card.appendChild(last); card.appendChild(nextEl); card.appendChild(countdownEl);
+  card.appendChild(controls); card.appendChild(kt); card.appendChild(manual); card.appendChild(future); card.appendChild(lastmod);
+    // set notify initial state and handler
+  function setNotifyIcon(state){
+  notifyBtn.textContent = state ? '🔔' : '🔕';
+  if(state){
+    notifyBtn.style.color = '#FFD700';
+    notifyBtn.style.opacity = '1';
+  } else {
+    notifyBtn.style.color = '#555';
+    notifyBtn.style.opacity = '0.6';
+  }
+}const local = readLocalNotify(id);
+    if(typeof local === 'undefined'){ setNotifyIcon(Boolean(data.notify)); writeLocalNotify(id, Boolean(data.notify)); } else { setNotifyIcon(local); }
+  notifyBtn.addEventListener('click', ()=>{
+    const cur = readLocalNotify(id);
+    const newVal = !cur;
+    writeLocalNotify(id, newVal);
+    setNotifyIcon(newVal);
+    try{ writeHistory('['+new Date().toLocaleString()+'] '+id+'：提醒切換為 '+(newVal? '提醒 (本機)':'不提醒 (本機)')); }catch(e){console.error(e);}    
+});
+  card.appendChild(notifyBtn);
+  $('grid').appendChild(card);
+
+  // store refs
+  cardEls[id] = {
+    card, nextEl: nextEl.querySelector('span'), countdownEl: countdownEl.querySelector('span'),
+    ktEl: kt.querySelector('strong'), hh, mm, ss, manual, lastEl: last, lastmod, data, notifyBtn
+  };
+  // render future immediately
+  updateFutureDisplay(id);
+}
+
+// update future times preview: future_i = nextSpawn + i*(respawn + killtime)
+function updateFutureDisplay(id){
+  const entry = cardEls[id];
+  if(!entry) return;
+  const data = entry.data;
+  const nextTs = computeNext(data);
+  const future = entry.card.querySelector('.future');
+  if(nextTs){
+    const arr=[]; const step = (Number(data.respawn||0) + Number(data.killtime||0)) * 60000;
+    for(let i=1;i<=4;i++) arr.push(fmtTime(nextTs + i*step));
+    future.textContent = '未來： ' + arr.join(' ・ ');
+  } else future.textContent = '未來： --';
+}
+
+
+function updateNotifyIcon(id){
+  const entry = cardEls[id];
+  if(!entry) return;
+  const btn = entry.card.querySelector('button[style]') || entry.card.querySelector('button');
+  const on = readLocalNotify(id);
+  if(btn){
+    btn.className = on ? 'notify-on' : 'notify-off';
+    btn.textContent = on ? '🔔' : '🔕';
+  }
+}
+
+// minimal tick update (only dynamic texts)
+function tickUpdate(){
+  const ids = Object.keys(cardEls);
+  let topName = null; let topRem = Infinity;
+  ids.forEach(id=>{
+    const e = cardEls[id]; const data = e.data;
+    const nextTs = computeNext(data); const rem = remainingMs(data);
+    e.countdownEl.textContent = nextTs ? msToHMS(rem) : '--:--:--';
+    e.nextEl.textContent = nextTs ? fmtTime(nextTs) : '--:--:--';
+    if(rem < topRem){ topRem = rem; topName = id; }
+  });
+  $('topName').textContent = topName || '—';
+  $('topCd').textContent = topRem===Infinity ? '--:--:--' : msToHMS(topRem);
+}
+
+// firestore helper
+async function writeMerge(id, data){ return db.collection('bosses').doc(id).set(data, { merge:true }); }
+  // write history entry
+  async function writeHistory(msg){ try{ await db.collection('history').add({ ts: Date.now(), msg }); }catch(e){ console.error('history write failed', e); } }
+
+
+// Actions
+// markKilled: set lastkill = now (user pressed completed)
+async function markKilled(id){
+  const finish = Date.now();
+  try{ await writeMerge(id, { lastkill: finish }); await writeHistory('['+new Date(finish).toLocaleString()+'] '+id+'：已擊殺 (手動)'); }catch(e){ alert('寫入失敗：' + e.message); }
+}
+// applyManual: user inputs kill finish time; set lastkill = dt.getTime()
+async function applyManual(id, hh, mm, ss){
+  const H=parseInt(hh,10), M=parseInt(mm,10), S=parseInt(ss,10);
+  if(isNaN(H)||isNaN(M)||isNaN(S)){ alert('請輸入時/分/秒或按現在(完成)'); return; }
+  const now = new Date(); const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), H, M, S, 0);
+  try{ await writeMerge(id, { lastkill: dt.getTime() }); await writeHistory('['+new Date(dt.getTime()).toLocaleString()+'] '+id+'：已擊殺 (手動套用)'); }catch(e){ alert('寫入失敗：' + e.message); }
+}
+// adjustMinutes: shift lastkill by delta minutes
+async function adjustMinutes(id, delta){
+  const doc = bosses[id];
+  const base = Number(doc.lastkill||0) || Date.now();
+  const newLast = base + delta*60000;
+  try{ await writeMerge(id, { lastkill: newLast }); }catch(e){ alert('寫入失敗：' + e.message); }
+}
+// adjustKilltime
+async function adjustKilltime(id, delta){
+  const doc = bosses[id];
+  const newKt = Math.max(0, (Number(doc.killtime||0) + delta));
+  try{ await writeMerge(id, { killtime: newKt }); }catch(e){ alert('寫入失敗：' + e.message); }
+}
+async function deleteBoss(id){ if(!confirm('確認刪除 '+id+' 嗎？')) return; try{ await db.collection('bosses').doc(id).delete(); }catch(e){ alert('刪除失敗：' + e.message); } }
+
+// add new boss
+$('addBtn').addEventListener('click', async ()=>{
+  const n = $('newName').value.trim(); const r = parseInt($('newRespawn').value,10)||120; const k = parseInt($('newKill').value,10)||1;
+  if(!n){ alert('請輸入名稱'); return; }
+  try{ await db.collection('bosses').doc(n).set({ name:n, respawn:r, killtime:k, lastkill:0, notify:true }); $('newName').value=''; await writeHistory('['+new Date().toLocaleString()+'] 新增王：'+n); writeLocalNotify(n, true); alert('新增完成'); }catch(e){ alert('新增失敗：' + e.message); }
+});
+
+// listener
+function startListener(){
+  // history listener - render last 100 events
+  const renderHistory = (docs)=>{
+    const el = document.getElementById('history'); if(!el) return; el.innerHTML=''; docs.forEach(d=>{ const data=d.data(); const div=document.createElement('div'); div.textContent='['+new Date(data.ts).toLocaleString()+'] '+data.msg; el.appendChild(div); }); };
+  db.collection('history').orderBy('ts','desc').limit(100).onSnapshot(snap=>{ renderHistory(snap.docs); });
+
+  if(unsub) unsub();
+  unsub = db.collection('bosses').onSnapshot(snap=>{
+    const seen = new Set();
+    snap.docs.forEach(d=>{
+      const data = d.data(); const id = d.id;
+      const normalized = {
+        name: data.name || id,
+        respawn: Number(data.respawn||0),
+        killtime: Number(data.killtime||0),
+        lastkill: Number(data.lastkill||0),
+        lastspawn: Number(data.lastspawn||0),
+        notify: (typeof data.notify === 'undefined') ? true : Boolean(data.notify)
+      };
+      bosses[id] = normalized; seen.add(id);
+      createOrUpdateCard(id, normalized);
+    });
+    Object.keys(cardEls).forEach(id=>{ if(!seen.has(id)){ cardEls[id].card.remove(); delete cardEls[id]; delete bosses[id]; } });
+    Object.keys(cardEls).forEach(id=> updateFutureDisplay(id));
+    tickUpdate();
+  }, err=>{ console.error('snapshot err', err); alert('Firestore 讀取錯誤：' + err.message); });
+}
+
+// scheduler: reminders + auto-advance
+setInterval(()=>{
+  Object.keys(bosses).forEach(id=>{
+    const doc = bosses[id];
+    const rem = remainingMs(doc);
+    if(rem<=180000 && rem>0 && !notified3[id]){
+      const should3 = (typeof readLocalNotify === 'function') ? readLocalNotify(id) : Boolean(doc.notify);
+      if(should3 && masterVol>0){ playPattern(3,240,140); } notified3[id]=true;
+      try{ if(Notification.permission==='granted') new Notification('三分鐘提醒', { body: id + ' 即將重生' }); }catch(e){}
+    }
+    if(rem<=0 && !notifiedDone[id]){
+      // spawn arrived: play 5-beep, set lastkill = spawn + killtime
+      const shouldDone = (typeof readLocalNotify === 'function') ? readLocalNotify(id) : Boolean(doc.notify);
+      if(shouldDone && masterVol>0){ playPattern(5,160,100); } notifiedDone[id]=true;
+      const nextTs = computeNext(doc);
+      if(nextTs){
+        const kt = Number(doc.killtime||0);
+        const killAt = nextTs + kt*60000;
+        writeMerge(id, { lastkill: killAt }).catch(e=>console.error('autoAdvance write error', e));
+      }
+    }
+    if(rem>180000) notified3[id]=false;
+    if(rem>0) notifiedDone[id]=false;
+  });
+  tickUpdate();
+},1000);
+
+// controls
+$('vol').addEventListener('input', e=>{ masterVol = parseFloat(e.target.value); });
+$('allowNotif').addEventListener('click', async ()=>{ if(window.Notification && Notification.permission!=='granted') await Notification.requestPermission(); try{ await audioCtx.resume(); alert('通知/聲效已啟用'); }catch(e){ alert('無法啟用聲效'); }});
+$('muteAll').addEventListener('click', ()=>{ masterVol=0; $('vol').value=0; alert('聲效已關閉'); });
+
+// start
+startListener();
+</script>
+</body>
+</html>
