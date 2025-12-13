@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>王重生監控</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont; }
+    table { border-collapse: collapse; margin-top: 16px; }
+    th, td { padding: 8px 12px; border-bottom: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+
+<h2>王重生狀態（Firebase Firestore）</h2>
+
+<table id="boss">
+  <tr>
+    <th>王</th>
+    <th>地圖</th>
+    <th>最後重生</th>
+    <th>學到的週期</th>
+    <th>倒數</th>
+  </tr>
+</table>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, onSnapshot }
+  from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// === REPLACE WITH YOUR FIREBASE CONFIG ===
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  appId: "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+function fmt(ms){
+  if(!ms) return "-";
+  return new Date(ms).toLocaleString();
+}
+
+function countdown(ms){
+  if(!ms) return "-";
+  const diff = ms - Date.now();
+  if(diff <= 0) return "即將";
+  const s = Math.floor(diff / 1000);
+  return `${Math.floor(s/60)}分 ${s%60}秒`;
+}
+
+const table = document.getElementById("boss");
+const ref = collection(db, "bosses");
+
+onSnapshot(ref, snap => {
+  table.innerHTML = `
+    <tr>
+      <th>王</th>
+      <th>地圖</th>
+      <th>最後重生</th>
+      <th>學到的週期</th>
+      <th>倒數</th>
+    </tr>`;
+
+  snap.forEach(doc => {
+    const b = doc.data();
+    table.innerHTML += `
+      <tr>
+        <td>${b.boss}</td>
+        <td>${b.map}</td>
+        <td>${fmt(b.last_seen)}</td>
+        <td>${b.learned_minutes ? b.learned_minutes + " 分" : "-"}</td>
+        <td>${countdown(b.next_predicted)}</td>
+      </tr>`;
+  });
+});
+</script>
+
+</body>
+</html>
