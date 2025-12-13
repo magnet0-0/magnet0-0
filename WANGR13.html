@@ -320,14 +320,16 @@ function createOrUpdateCard(id, data){
   const kplus = document.createElement('button'); kplus.className='smallbtn'; kplus.textContent='+1'; kplus.addEventListener('click', ()=> adjustKilltime(id,1));
   kt.appendChild(kmin); kt.appendChild(kplus);
   // manual inputs (preserved)
-  const manual = document.createElement('div'); manual.className='manual-row';
-  const hh = document.createElement('input'); hh.className='input small'; hh.placeholder='時'; hh.type='number'; hh.min=0; hh.max=23;
-  const mm = document.createElement('input'); mm.className='input small'; mm.placeholder='分'; mm.type='number'; mm.min=0; mm.max=59;
-  const ss = document.createElement('input'); ss.className='input small'; ss.placeholder='秒'; ss.type='number'; ss.min=0; ss.max=59;
-  const apply = document.createElement('button'); apply.className='btn'; apply.textContent='套用';
-  nowBtn.addEventListener('click', ()=>{ const d=new Date(); hh.value=d.getHours(); mm.value=d.getMinutes(); ss.value=d.getSeconds(); });
-  apply.addEventListener('click', ()=> applyManual(id, hh.value, mm.value, ss.value));
-  manual.appendChild(nowBtn); manual.appendChild(hh); manual.appendChild(mm); manual.appendChild(ss); manual.appendChild(apply);
+const manual = document.createElement('div'); manual.className='manual-row';
+const hh = document.createElement('input'); hh.className='input small'; hh.placeholder='時'; hh.type='number'; hh.min=0; hh.max=23;
+const mm = document.createElement('input'); mm.className='input small'; mm.placeholder='分'; mm.type='number'; mm.min=0; mm.max=59;
+const ss = document.createElement('input'); ss.className='input small'; ss.placeholder='秒'; ss.type='number'; ss.min=0; ss.max=59;
+const apply = document.createElement('button'); apply.className='btn'; apply.textContent='套用';
+
+manual.appendChild(hh);
+manual.appendChild(mm);
+manual.appendChild(ss);
+manual.appendChild(apply);
   // future and lastmod
   const future = document.createElement('div'); future.className='future';
   const lastmod = document.createElement('div'); lastmod.className='lastmod'; lastmod.textContent = '最後修改(LastKill)： ' + (data.lastkill? fmtTime(data.lastkill): '--:--:--');
