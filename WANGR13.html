@@ -187,8 +187,8 @@ body{
 <div class="container" id="app">
   <div class="panel">
     <div class="ext-status">
-      <div class="ext-status-title">BossWatcher 外掛同步中</div>
-      <div class="ext-status-sub">自動偵測：巴拉卡斯、死靈君王．海露拜、長老會．巴陸德、吉爾達斯</div>
+      <div class="ext-status-title"></div>
+      <div class="ext-status-sub"></div>
     </div>
     <div style="color:#fff;margin-bottom:8px">資料來源： Firestore 集合 <code>/bosses</code></div>
     <div class="row">
@@ -321,7 +321,6 @@ function createOrUpdateCard(id, data){
   kt.appendChild(kmin); kt.appendChild(kplus);
   // manual inputs (preserved)
   const manual = document.createElement('div'); manual.className='manual-row';
-  const nowBtn = document.createElement('button'); nowBtn.className='smallbtn'; nowBtn.textContent='現在(完成)';
   const hh = document.createElement('input'); hh.className='input small'; hh.placeholder='時'; hh.type='number'; hh.min=0; hh.max=23;
   const mm = document.createElement('input'); mm.className='input small'; mm.placeholder='分'; mm.type='number'; mm.min=0; mm.max=59;
   const ss = document.createElement('input'); ss.className='input small'; ss.placeholder='秒'; ss.type='number'; ss.min=0; ss.max=59;
