@@ -1,56 +1,112 @@
-<!doctype html>
-<html lang="zh-Hant">
-<head>
-<meta charset="utf-8">
-<title>王重生整合看板</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-body { font-family: system-ui; background:#0b1020; color:#fff; margin:20px }
-.card { background:#141a33; padding:16px; border-radius:12px; margin-bottom:12px }
-.timer { font-size:14px; opacity:.85 }
-.big { font-size:20px; font-weight:700 }
-</style>
-</head>
-<body>
+<script type="module">
+import { initializeApp } from
+  "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  onSnapshot,
+  query
+} from
+  "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-<h2>🔥 王重生整合看板</h2>
-<div id="list"></div>
+/* ========= Firebase ========= */
 
-<script>
-async function load() {
-  const res = await fetch("/api/boss");
-  const data = await res.json();
+const firebaseConfig = {
+  apiKey: "AIzaSyAgV1fpP2XRS5fhgg4h0clp9AEJqAJtypo",
+  authDomain: "wangr-sync.firebaseapp.com",
+  projectId: "wangr-sync",
+  storageBucket: "wangr-sync.firebasestorage.app",
+  messagingSenderId: "178110502200",
+  appId: "1:178110502200:web:adb5dc30cf34c5f0dc9dcd",
+  measurementId: "G-ZN1H4KHEJR"
+};
 
-  const now = Date.now();
-  const root = document.getElementById("list");
-  root.innerHTML = "";
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-  Object.values(data).forEach(b => {
-    const e = document.createElement("div");
-    e.className = "card";
+/* ========= 本地狀態 ========= */
 
-    let countdown = "";
-    if (b.respawn) {
-      const t = b.respawn.earliest - now;
-      countdown = t > 0
-        ? `最早倒數：${Math.floor(t / 60000)} 分`
-        : "⚠️ 已進入可能刷新區間";
-    }
+// 關注的王（存在瀏覽器）
+const pinnedBosses = new Set(
+  JSON.parse(localStorage.getItem("pinnedBosses") || "[]")
+);
 
-    e.innerHTML = `
-      <div class="big">${b.boss}</div>
-      <div class="timer">上次：${new Date(b.detectedAt).toLocaleString()}</div>
-      <div class="timer">${countdown}</div>
+/* ========= DOM ========= */
+
+const bossList = document.getElementById("bossList");
+
+/* ========= 工具 ========= */
+
+function savePinned() {
+  localStorage.setItem(
+    "pinnedBosses",
+    JSON.stringify([...pinnedBosses])
+  );
+}
+
+function isPinned(boss) {
+  return pinnedBosses.has(boss);
+}
+
+/* ========= UI Render ========= */
+
+function renderBossList(bosses) {
+  bossList.innerHTML = "";
+
+  // 🔥 排序規則：
+  // 1. 關注的在最上面
+  // 2. 其餘依 detectedAt 新到舊
+  bosses.sort((a, b) => {
+    const ap = isPinned(a.boss) ? 1 : 0;
+    const bp = isPinned(b.boss) ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return b.detectedAt - a.detectedAt;
+  });
+
+  bosses.forEach(b => {
+    const div = document.createElement("div");
+    div.style.border = "1px solid #444";
+    div.style.padding = "10px";
+    div.style.marginBottom = "10px";
+    div.style.background = isPinned(b.boss)
+      ? "#1b2a4a"
+      : "#111";
+
+    const checked = isPinned(b.boss) ? "checked" : "";
+
+    div.innerHTML = `
+      <label style="float:right; cursor:pointer">
+        <input type="checkbox" ${checked} />
+        關注
+      </label>
+      <b>${b.boss}</b><br>
+      地圖：${b.map || "未知"}<br>
+      上次出現：${new Date(b.detectedAt).toLocaleString()}
     `;
-    root.appendChild(e);
+
+    // 勾選事件
+    div.querySelector("input").addEventListener("change", e => {
+      if (e.target.checked) {
+        pinnedBosses.add(b.boss);
+      } else {
+        pinnedBosses.delete(b.boss);
+      }
+      savePinned();
+      renderBossList(bosses);
+    });
+
+    bossList.appendChild(div);
   });
 }
 
-// 每 5 秒更新倒數
-load();
-setInterval(load, 5000);
+/* ========= Firestore 即時監聽 ========= */
+
+const q = query(collection(db, "bossEvents"));
+
+onSnapshot(q, snap => {
+  const bosses = [];
+  snap.forEach(doc => bosses.push(doc.data()));
+  renderBossList(bosses);
+});
+
 </script>
-
-</body>
-</html>
-
