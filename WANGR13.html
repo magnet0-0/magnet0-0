@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>WANGR13 v8.9 FINAL</title>
+<style>
+:root{
+  --bg:#050509;--panel:#101015;--card:#14141a;
+  --text:#eee;--muted:#aaa;--danger:#ff5252;
+  --accent:#7c4dff;--accent2:#448aff;--ok:#6cff6c;--warn:#ffb84d;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+font-family:"Microsoft JhengHei","Noto Sans TC",Arial}
+.topbar{position:fixed;top:0;left:0;right:0;z-index:999;
+background:linear-gradient(180deg,#0a0a0f,#050509);padding:14px 18px}
+.top-row{display:flex;align-items:center;gap:20px}
+.top-left{flex:1}
+.top-label{font-size:13px;color:#ccc}
+.top-name{font-size:28px;font-weight:900;margin-top:2px}
+.top-cd{font-size:48px;font-weight:900;color:var(--danger);margin-top:6px}
+.top-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.slider{width:160px}
+.btn{background:#2a2a2f;color:#fff;border:0;border-radius:8px;padding:8px 12px;cursor:pointer}
+.btn.small{padding:6px 10px;font-size:13px}
+.btn.orange{background:#ffb200;color:#111;font-weight:800}
+.btn.green{background:#2e7d32}
+.btn.red{background:#c62828}
+.progress-line{height:2px;margin-top:12px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.container{max-width:1100px;margin:170px auto 24px;padding:0 16px}
+.panel{background:linear-gradient(180deg,#1b1230,#0f0f18);
+border-radius:16px;padding:14px;margin-bottom:16px;border:1px solid rgba(255,255,255,.08)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.input{background:#0b0b0c;border:1px solid #222;color:#fff;border-radius:8px;padding:6px 8px}
+.input.small{width:70px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.boss-card{background:linear-gradient(180deg,#16161f,#0e0e14);
+border-radius:16px;padding:14px;position:relative;border:1px solid rgba(255,215,128,.35)}
+.boss-title{font-size:22px;font-weight:900;color:#ffe082}
+.info{font-size:13px;margin-top:4px;color:#e0e0ff}
+.system-line{font-weight:800;margin-top:4px}
+.next-time{color:#ffab91;font-weight:900}
+.countdown{font-size:18px;font-weight:900;color:#fff}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.smallbtn{background:linear-gradient(180deg,#3949ab,#1a237e);
+border-radius:8px;padding:6px 10px;color:#fff;border:0;cursor:pointer;font-size:12px;font-weight:700}
+.future{margin-top:8px;color:#bbb;font-size:12px}
+.lastmod{margin-top:4px;color:#aaa;font-size:12px}
+.manual{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="top-row">
+    <div class="top-left">
+      <div class="top-label">下一個：</div>
+      <div id="topName" class="top-name">—</div>
+      <div id="topCd" class="top-cd">--:--:--</div>
+    </div>
+    <div class="top-right">
+      <span style="font-size:13px">音量</span>
+      <input id="vol" class="slider" type="range" min="0" max="1" step="0.01" value="0.8"/>
+      <button id="allowNotif" class="btn small">允許通知＋啟用音效</button>
+      <button id="muteAll" class="btn small">關閉通知/音效</button>
+    </div>
+  </div>
+  <div class="progress-line"></div>
+</div>
+
+<div class="container">
+  <div class="panel">
+    <div class="row">
+      名稱：
+      <input id="newName" class="input" list="systemBossList"/>
+      重生(分)：
+      <input id="newRespawn" class="input small" type="number" value="120"/>
+      擊殺耗時(分)：
+      <input id="newKill" class="input small" type="number" value="3"/>
+      <button id="addBtn" class="btn orange">新增王</button>
+      <datalist id="systemBossList"></datalist>
+    </div>
+  </div>
+  <div id="grid" class="grid"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+<script>
+/* ================= Firebase ================= */
+firebase.initializeApp({
+  apiKey:"AIzaSyDs9i1UKuvUohyE2dYQYk6nSBXHrvTvzEM",
+  authDomain:"wangr-sync2.firebaseapp.com",
+  projectId:"wangr-sync2"
+});
+const db=firebase.firestore();
+
+const sysApp=firebase.initializeApp({
+  apiKey:"AIzaSyAgV1fpP2XRS5fhgg4h0clp9AEJqAJtypo",
+  authDomain:"wangr-sync.firebaseapp.com",
+  projectId:"wangr-sync"
+},"system");
+const dbSystem=sysApp.firestore();
+
+/* ================= System data ================= */
+const systemBossList=[];
+const systemSpawnMap={};
+
+dbSystem.collection("boss_events").onSnapshot(snap=>{
+  snap.forEach(doc=>{
+    const d=doc.data();
+    if(!d.boss) return;
+    if(!systemBossList.includes(d.boss)) systemBossList.push(d.boss);
+    if(!systemSpawnMap[d.boss]||d.spawnTime>systemSpawnMap[d.boss]){
+      systemSpawnMap[d.boss]=d.spawnTime;
+    }
+  });
+});
+
+/* ===== Stable datalist ===== */
+(function(){
+  let last="";
+  setInterval(()=>{
+    const h=systemBossList.join("|");
+    if(h===last) return;
+    last=h;
+    const dl=document.getElementById("systemBossList");
+    dl.innerHTML="";
+    systemBossList.forEach(n=>{
+      const o=document.createElement("option");
+      o.value=n;dl.appendChild(o);
+    });
+  },500);
+})();
+
+/* ================= Logic ================= */
+const bosses={};
+
+function pad(n){return String(n).padStart(2,"0")}
+function fmt(ms){return new Date(ms).toLocaleTimeString("zh-TW",{hour12:false})}
+function hms(ms){
+  if(ms<=0) return "00:00:00";
+  const s=Math.floor(ms/1000);
+  return pad(Math.floor(s/3600))+":"+pad(Math.floor((s%3600)/60))+":"+pad(s%60);
+}
+function effectiveLastKill(doc,id){
+  if(doc.lastkill_source==="manual") return doc.lastkill||0;
+  return Math.max(doc.lastkill||0, systemSpawnMap[id]||0);
+}
+function computeNext(doc,id){
+  const base=effectiveLastKill(doc,id);
+  if(!base) return null;
+  return base + (doc.respawn||0)*60000;
+}
+function computeFuture(doc,id){
+  const base=effectiveLastKill(doc,id);
+  if(!base) return [];
+  const step=((doc.respawn||0)+(doc.killtime||0))*60000;
+  const out=[];
+  for(let i=1;i<=4;i++){
+    out.push(fmt(base + (doc.respawn||0)*60000 + i*step));
+  }
+  return out;
+}
+
+/* ================= UI ================= */
+function renderBoss(id,data){
+  const card=document.createElement("div");
+  card.className="boss-card";
+  card.innerHTML=`
+    <div class="boss-title">${id}</div>
+    <div class="system-line">系統重生：--</div>
+    <div class="info last">上次擊殺：--</div>
+    <div class="info next">下一次重生：--</div>
+    <div class="countdown">--:--:--</div>
+    <div class="controls">
+      <button class="btn green kill">已擊殺 (完成)</button>
+      <button class="smallbtn p1">+1</button>
+      <button class="smallbtn m1">-1</button>
+      <button class="smallbtn p5">+5</button>
+      <button class="smallbtn m5">-5</button>
+      <button class="btn red del">刪除</button>
+    </div>
+    <div class="info">擊殺耗時： <strong class="kt">${data.killtime||0}</strong> 分
+      <button class="smallbtn km">-1</button>
+      <button class="smallbtn kp">+1</button>
+    </div>
+    <div class="manual">
+      <input class="input small hh" placeholder="時"/>
+      <input class="input small mm" placeholder="分"/>
+      <input class="input small ss" placeholder="秒"/>
+      <button class="btn apply">套用</button>
+    </div>
+    <div class="future">未來：--</div>
+    <div class="lastmod">最後修改(LastKill)：--</div>
+  `;
+  document.getElementById("grid").appendChild(card);
+
+  bosses[id]={...data,el:card};
+  bindCard(id);
+}
+
+function adjustLastKill(id,deltaMin){
+  const b=bosses[id];
+  const base = effectiveLastKill(b,id) || Date.now();
+  db.collection("bosses").doc(id).set({
+    lastkill: base + deltaMin*60000,
+    lastkill_source:"manual"
+  },{merge:true});
+}
+
+function bindCard(id){
+  const b=bosses[id];
+  const el=b.el;
+
+  el.querySelector(".kill").onclick=()=>{
+    db.collection("bosses").doc(id).set({
+      lastkill:Date.now(),
+      lastkill_source:"manual"
+    },{merge:true});
+  };
+
+  el.querySelector(".p1").onclick=()=>adjustLastKill(id,1);
+  el.querySelector(".m1").onclick=()=>adjustLastKill(id,-1);
+  el.querySelector(".p5").onclick=()=>adjustLastKill(id,5);
+  el.querySelector(".m5").onclick=()=>adjustLastKill(id,-5);
+
+  el.querySelector(".apply").onclick=()=>{
+    const hh=parseInt(el.querySelector(".hh").value,10);
+    const mm=parseInt(el.querySelector(".mm").value,10);
+    const ss=parseInt(el.querySelector(".ss").value,10);
+    if(isNaN(hh)||isNaN(mm)||isNaN(ss)) return;
+    const now=new Date();
+    const dt=new Date(now.getFullYear(),now.getMonth(),now.getDate(),hh,mm,ss,0);
+    db.collection("bosses").doc(id).set({
+      lastkill:dt.getTime(),
+      lastkill_source:"manual"
+    },{merge:true});
+  };
+
+  el.querySelector(".del").onclick=()=>{
+    if(confirm("刪除 "+id+" ?")){
+      db.collection("bosses").doc(id).delete();
+    }
+  };
+
+  el.querySelector(".kp").onclick=()=>{
+    db.collection("bosses").doc(id).set({killtime:(b.killtime||0)+1},{merge:true});
+  };
+  el.querySelector(".km").onclick=()=>{
+    db.collection("bosses").doc(id).set({killtime:Math.max(0,(b.killtime||0)-1)},{merge:true});
+  };
+}
+
+/* ================= Add ================= */
+document.getElementById("addBtn").onclick=()=>{
+  const n=document.getElementById("newName").value.trim();
+  if(!systemBossList.includes(n)){alert("請從下拉選擇王");return;}
+  db.collection("bosses").doc(n).set({
+    name:n,respawn:120,killtime:3,lastkill:0,lastkill_source:"system"
+  },{merge:true});
+};
+
+/* ================= Listen ================= */
+db.collection("bosses").onSnapshot(snap=>{
+  document.getElementById("grid").innerHTML="";
+  snap.forEach(doc=>{
+    renderBoss(doc.id,doc.data());
+  });
+});
+
+/* ================= Tick ================= */
+setInterval(()=>{
+  let top=null,topRem=1e18;
+  Object.keys(bosses).forEach(id=>{
+    const b=bosses[id];
+    const el=b.el;
+    const sys=systemSpawnMap[id];
+    if(sys){
+      el.querySelector(".system-line").textContent="系統重生："+fmt(sys);
+    }
+    const next=computeNext(b,id);
+    if(next){
+      const rem=next-Date.now();
+      el.querySelector(".next").innerHTML="下一次重生： <span class='next-time'>"+fmt(next)+"</span>";
+      el.querySelector(".countdown").textContent=hms(rem);
+      const f=computeFuture(b,id);
+      el.querySelector(".future").textContent="未來："+(f.length?" "+f.join(" ・ "):"--");
+      if(rem<topRem&&rem>0){topRem=rem;top=id;}
+    }
+    if(b.lastkill){
+      el.querySelector(".last").textContent="上次擊殺："+fmt(b.lastkill);
+      el.querySelector(".lastmod").textContent="最後修改(LastKill)："+fmt(b.lastkill);
+    }
+    if(b.killtime!=null){
+      el.querySelector(".kt").textContent=b.killtime;
+    }
+  });
+  document.getElementById("topName").textContent=top||"—";
+  document.getElementById("topCd").textContent=top?hms(topRem):"--:--:--";
+},1000);
+
+/* ================= Audio ================= */
+let masterVol=0.8;
+let audioCtx=null;
+document.getElementById("vol").oninput=e=>masterVol=parseFloat(e.target.value);
+document.getElementById("allowNotif").onclick=async()=>{
+  if(Notification.permission!=="granted") await Notification.requestPermission();
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+};
+document.getElementById("muteAll").onclick=()=>{
+  masterVol=0;document.getElementById("vol").value=0;
+};
+</script>
+
+</body>
+</html>
