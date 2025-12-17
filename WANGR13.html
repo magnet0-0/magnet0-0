@@ -49,6 +49,26 @@ border-radius:8px;padding:6px 10px;color:#fff;border:0;cursor:pointer;font-size:
 .future{margin-top:8px;color:#bbb;font-size:12px}
 .lastmod{margin-top:4px;color:#aaa;font-size:12px}
 .manual{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+
+/* === 鈴鐺：王卡內、資訊區右側（非倒數區） === */
+.boss-card{ position:relative; }
+.notifybtn{
+  position:absolute;
+  right:16px;
+  top:64px;            /* aligns with the info block under the title */
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  background:#2a2a2f;
+  color:#ffd54f;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  font-size:14px;
+}
+.notifybtn.off{ opacity:0.35; }
+
 </style>
 </head>
 <body>
@@ -172,6 +192,7 @@ function renderBoss(id,data){
   card.className="boss-card";
   card.innerHTML=`
     <div class="boss-title">${id}</div>
+<div class="notifybtn">🔔</div>
     <div class="system-line">系統重生：--</div>
     <div class="info last">上次擊殺：--</div>
     <div class="info next">下一次重生：--</div>
@@ -184,7 +205,12 @@ function renderBoss(id,data){
       <button class="smallbtn m5">-5</button>
       <button class="btn red del">刪除</button>
     </div>
-    <div class="info">擊殺耗時： <strong class="kt">${data.killtime||0}</strong> 分
+    
+<div class="info">
+  刷新用時：
+  <input class="input small respawn-edit" type="number" value="${data.respawn||0}"/> 分
+</div>
+<div class="info">擊殺耗時： <strong class="kt">${data.killtime||0}</strong> 分
       <button class="smallbtn km">-1</button>
       <button class="smallbtn kp">+1</button>
     </div>
@@ -314,6 +340,34 @@ document.getElementById("allowNotif").onclick=async()=>{
 document.getElementById("muteAll").onclick=()=>{
   masterVol=0;document.getElementById("vol").value=0;
 };
+</script>
+
+
+<script>
+document.addEventListener('click', e => {
+  const bell = e.target.closest('.boss-card .notifybtn');
+  if(!bell) return;
+  bell.classList.toggle('off');
+});
+</script>
+
+
+<script>
+// === PATCH: 王卡內刷新用時可直接修改 ===
+document.addEventListener('change', e => {
+  const inp = e.target.closest('.respawn-edit');
+  if(!inp) return;
+  const card = inp.closest('.boss-card');
+  if(!card) return;
+  const nameEl = card.querySelector('.boss-title');
+  if(!nameEl) return;
+  const id = nameEl.textContent;
+  const v = parseInt(inp.value, 10);
+  if(isNaN(v) || v <= 0) return;
+  firebase.firestore().collection("bosses").doc(id).set({
+    respawn: v
+  }, { merge:true });
+});
 </script>
 
 </body>
