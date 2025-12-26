@@ -393,7 +393,7 @@
                 updateGlobalCountdown();
                 autoAdvanceNextSpawn();
                 checkBossAlerts();
-                updateFutureBlocks();   // 新增：每秒重算未來4次文字
+                updateFutureBlocks();
             }, 1000);
         }
 
@@ -509,7 +509,7 @@
             if (entries.length === 0) {
                 const noResult = document.createElement('div');
                 noResult.className = 'no-results';
-                noResult.innerHTML = `目前尚未新增任何王，請從上方搜尋王名後新增。`;
+                noResult.innerHTML = `目前尚未新增任何王，請從右下角「+」或上方搜尋王名後新增。`;
                 container.appendChild(noResult);
                 return;
             }
@@ -679,7 +679,6 @@
                 times.push(next);
                 next += respawnMs + killMs;
             }
-            // 動態滾動：把已經過去的移到後面
             const now = Date.now();
             while (times.length && times[0] <= now) {
                 const last = times[times.length - 1];
@@ -902,6 +901,7 @@
         function openAddModal() { document.getElementById('addModal').style.display = 'block'; }
         function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
 
+        // ★ 修改後：新增王就用「未來四次中最接近現在的一次」當 nextSpawn
         async function addNewBoss() {
             const name = document.getElementById('newBossName').value.trim();
             let respawnMinutes = parseInt(document.getElementById('newRespawnMinutes').value || '60', 10);
@@ -911,6 +911,28 @@
                 alert('請輸入王名稱');
                 return;
             }
+
+            // 先用現在時間當基準 deathTime
+            const now = new Date();
+            const hhmm = now.getHours().toString().padStart(2,'0') + ':' +
+                         now.getMinutes().toString().padStart(2,'0');
+
+            // 算出未來四次
+            const futures = predictNextSpawns({
+                deathTime: hhmm,
+                respawnMinutes,
+                killTime
+            });
+
+            // 從 futures 中找「最接近現在且 > 現在」的那一次
+            const nowMs = Date.now();
+            let best = null;
+            futures.forEach(t => {
+                if (t > nowMs && (best === null || t < best)) {
+                    best = t;
+                }
+            });
+            const nextSpawn = best || futures[0] || null;
 
             try {
                 const snap = await templatesRef.where('name','==',name).limit(1).get();
@@ -929,8 +951,8 @@
                     respawn: respawnMinutes,
                     respawnMinutes: respawnMinutes,
                     killTime: killTime,
-                    deathTime: '',
-                    nextSpawn: null,
+                    deathTime: hhmm,
+                    nextSpawn: nextSpawn,
                     threeMinAlerted: false,
                     spawnAlerted: false,
                     notify: true,
