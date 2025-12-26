@@ -111,68 +111,113 @@
         }
 
         .boss-card {
-            background: linear-gradient(135deg, rgba(6,14,40,0.98), rgba(15,30,70,0.98));
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(10,16,40,0.92);
             border-radius: 14px;
-            padding: 16px 18px;
+            padding: 14px 16px 12px;
             position: relative;
-            border: 1px solid rgba(124,229,255,0.35);
-            transition: all 0.18s ease-out;
-            backdrop-filter: blur(10px);
-            box-shadow:
-                0 0 0 1px rgba(0,0,0,0.6),
-                0 14px 32px rgba(0,0,0,0.7);
-            overflow: hidden;
-        }
-        .boss-card::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background:
-                linear-gradient(120deg, rgba(124,229,255,0.14), transparent 55%),
-                linear-gradient(-120deg, rgba(163,113,255,0.14), transparent 60%);
-            opacity: 0.7;
-            pointer-events: none;
+            border: 1px solid rgba(124,229,255,0.3);
+            transition: transform 0.16s ease-out, box-shadow 0.16s ease-out, border-color 0.16s;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 10px 24px rgba(0,0,0,0.7);
         }
         .boss-card:hover {
-            box-shadow:
-                0 0 0 1px rgba(124,229,255,0.7),
-                0 18px 40px rgba(0,0,0,0.9);
-            transform: translateY(-2px);
+            border-color: rgba(124,229,255,0.7);
+            box-shadow: 0 16px 32px rgba(0,0,0,0.85);
+            transform: translateY(-1px);
+        }
+
+        .boss-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .boss-title-block {
+            flex: 1;
+            min-width: 0;
+        }
+        .boss-name {
+            font-size: 1.6em;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            color: #e9f3ff;
+            text-shadow: 0 0 10px rgba(0,0,0,0.8);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .boss-sub {
+            margin-top: 4px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #7ce5ff;
+            letter-spacing: 0.5px;
+            text-shadow:
+                0 0 10px rgba(124,229,255,0.95),
+                0 0 20px rgba(0,0,0,0.9);
+        }
+
+        .boss-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 6px;
+        }
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            letter-spacing: 0.4px;
+            transition: transform 0.12s, box-shadow 0.12s, filter 0.12s;
+        }
+        .btn-primary {
+            background-image: linear-gradient(135deg, #5f9dff, #23e0ff);
+            color: #fff;
+            box-shadow: 0 0 10px rgba(35,224,255,0.55);
+        }
+        .btn-danger {
+            background-image: linear-gradient(135deg, #ff5a7b, #ff9a4b);
+            color: #fff;
+            box-shadow: 0 0 10px rgba(255,90,123,0.6);
+        }
+        .btn-primary:hover, .btn-danger:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.06);
         }
 
         .boss-main {
-            flex: 1;
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            column-gap: 14px;
-            row-gap: 6px;
-            position: relative;
-            z-index: 1;
+            grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.5fr);
+            gap: 10px;
+            margin-top: 4px;
         }
-        .boss-name {
-            grid-column: 1 / -1;
-            font-size: 1.7em;
-            letter-spacing: 1.2px;
-            font-weight: 700;
-            color: #7ce5ff;
-            text-shadow:
-                0 0 10px rgba(124,229,255,0.8),
-                0 0 24px rgba(0,255,255,0.4);
-            margin-bottom: 4px;
-        }
-        .input-group { margin: 6px 0; }
+
+        .input-group { margin: 0; }
         .input-group label {
-            display: block; margin-bottom: 4px;
-            color: #a9b3ff; font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
+            display: block;
+            margin-bottom: 3px;
+            color: rgba(180,196,255,0.9);
+            font-size: 11px;
+            letter-spacing: 0.6px;
         }
         .input-group input {
-            width: 100%; height: 38px;
-            padding: 6px 10px;
+            width: 100%;
+            height: 34px;
+            padding: 6px 8px;
             background: rgba(6,10,30,0.95);
             border: 1px solid rgba(124,229,255,0.25);
-            border-radius: 7px; color: #e9f3ff; font-size: 14px;
+            border-radius: 7px;
+            color: #e9f3ff;
+            font-size: 14px;
             transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
             box-shadow: inset 0 0 0 1px rgba(0,0,0,0.7);
         }
@@ -185,79 +230,72 @@
                 inset 0 0 0 1px rgba(0,0,0,0.9);
         }
 
+        .time-input-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .time-input-row input { width: 100%; }
+
         .predict-times {
-            grid-column: 1 / -1;
-            background: linear-gradient(120deg, rgba(8,24,70,0.95), rgba(4,12,40,0.95));
-            padding: 10px 12px; border-radius: 10px; margin: 6px 0 0;
-            border-left: 3px solid #7ce5ff;
-            box-shadow: inset 0 0 0 1px rgba(50,100,200,0.35);
-            font-size: 13px;
+            grid-column: 2 / 3;
+            margin-top: 0;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(8,22,60,0.9);
+            border: 1px solid rgba(80,130,255,0.4);
+            font-size: 12px;
+            color: #dbe7ff;
         }
         .predict-times strong {
+            margin-right: 8px;
+            font-weight: 600;
             color: #7ce5ff;
-            text-shadow: 0 0 8px rgba(124,229,255,0.6);
         }
-        .predict-item { margin: 2px 0; font-size: 12px; color: #dbe7ff; }
-
-        .boss-right {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 10px;
-            margin-left: 16px;
-            min-width: 140px;
-            position: relative;
-            z-index: 1;
+        .predict-item {
+            display: inline-block;
+            margin-right: 10px;
+            margin-top: 0;
         }
 
-        .controls {
+        .toggle-container {
             display: flex;
-            gap: 8px;
-            margin-top: 4px;
             align-items: center;
-            flex-wrap: wrap;
-            justify-content: flex-end;
+            gap: 6px;
         }
-        .btn {
-            padding: 8px 14px; border: none; border-radius: 999px; cursor: pointer;
-            font-weight: 700; transition: all 0.18s; font-size: 13px;
-            letter-spacing: 0.5px;
+        .toggle-label {
+            font-size: 11px;
+            color: rgba(220,230,255,0.85);
         }
-        .btn-primary {
-            background-image: linear-gradient(135deg, #7b5cff, #00e0ff);
-            color: #fff;
-            box-shadow: 0 0 12px rgba(0,224,255,0.65);
-        }
-        .btn-danger {
-            background-image: linear-gradient(135deg, #ff4b91, #ff8a3b);
-            color: #fff;
-            box-shadow: 0 0 12px rgba(255,75,145,0.7);
-        }
-        .btn-primary:hover, .btn-danger:hover {
-            transform: translateY(-1px) scale(1.03);
-            filter: brightness(1.05);
-        }
-
-        .toggle-container { display: flex; align-items: center; gap: 8px; }
-        .toggle-label { font-size: 13px; color: #ccc; }
         .toggle {
-            width: 50px; height: 22px;
-            background: linear-gradient(135deg, #222, #111);
+            width: 44px;
+            height: 20px;
+            background: linear-gradient(135deg, #20263b, #111522);
             border-radius: 999px;
-            border: 1px solid rgba(124,229,255,0.45);
-            position: relative; cursor: pointer; transition: all 0.2s;
-            box-shadow: 0 0 10px rgba(0,0,0,0.8);
-        }
-        .toggle.active {
-            background: linear-gradient(135deg, #12fff7, #7b5cff);
-            box-shadow: 0 0 14px rgba(124,229,255,0.9);
+            border: 1px solid rgba(124,229,255,0.4);
+            position: relative;
+            cursor: pointer;
+            transition: background 0.18s, box-shadow 0.18s;
+            box-shadow: 0 0 8px rgba(0,0,0,0.8);
         }
         .toggle::after {
-            content: ''; position: absolute; top: 2px; left: 2px;
-            width: 18px; height: 18px; background: #fff; border-radius: 50%;
-            transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.6);
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.18s;
         }
-        .toggle.active::after { transform: translateX(26px); }
+        .toggle.active {
+            background: linear-gradient(135deg, #26ffb3, #4ea3ff);
+            box-shadow: 0 0 12px rgba(124,229,255,0.9);
+        }
+        .toggle.active::after {
+            transform: translateX(22px);
+        }
 
         .add-boss-btn {
             position: fixed; bottom: 30px; right: 30px;
@@ -297,6 +335,8 @@
             .header { flex-direction: column; gap: 10px; align-items: flex-start; }
             #countdown { font-size: 1.9em; }
             .boss-cards { grid-template-columns: 1fr; margin-top: 60px; }
+            .boss-main { grid-template-columns: 1fr; }
+            .predict-times { grid-column: 1 / -1; margin-top: 6px; }
         }
     </style>
 </head>
@@ -384,7 +424,6 @@
         let bosses = {};
         let soundEnabled = true;
 
-        // ====== 通用時間工具 ======
         function parseTimeToTodayMillis(timeStr) {
             if (!timeStr) return null;
             const parts = timeStr.split(':');
@@ -397,7 +436,6 @@
             return d.getTime();
         }
 
-        // 根據死亡時間 + 重生間隔 + 擊殺時間算下一次重生（確保在未來）
         function calcNextSpawn(deathTime, respawnMinutes, killTime) {
             const base = parseTimeToTodayMillis(deathTime);
             if (base == null) return null;
@@ -552,7 +590,6 @@
             statusEl.textContent = `共 ${total} 個王`;
         }
 
-        // 只給前端顯示用（未來 4 次）
         function predictNextSpawns(boss) {
             const times = [];
             const killTime = boss.killTime || 0;
@@ -576,16 +613,16 @@
         }
 
         function renderFutureText(list) {
-            if (!list.length) return '<div class="predict-item">--</div>';
+            if (!list.length) return '<span class="predict-item">--</span>';
             return list.map((t,i)=>
-                `<div class="predict-item">第${i+1}次: ${
+                `<span class="predict-item">${i+1}次 ${
                     new Date(t).toLocaleTimeString('zh-TW',{
                         timeZone:'Asia/Taipei',
                         hour:'2-digit',
                         minute:'2-digit',
                         hour12:false
                     })
-                }</div>`
+                }</span>`
             ).join('');
         }
 
@@ -603,48 +640,67 @@
                 ? predictNextSpawns({deathTime, respawnMinutes, killTime})
                 : [];
 
+            let subText = '待擊殺';
+            if (futures.length > 0) {
+                const first = new Date(futures[0]);
+                const hh = String(first.getHours()).padStart(2,'0');
+                const mm = String(first.getMinutes()).padStart(2,'0');
+                subText = `下一次重生  ${hh}:${mm}`;
+            }
+
             div.innerHTML = `
-                <div class="boss-main">
-                    <div class="boss-name">${boss.name || '未知王'}</div>
+                <div class="boss-header">
+                    <div class="boss-title-block">
+                        <div class="boss-name">${boss.name || '未知王'}</div>
+                        <div class="boss-sub">${subText}</div>
+                    </div>
 
-                    <div class="input-group">
-                        <label>💀 死亡時間</label>
-                        <div style="display:flex;gap:8px;">
-                            <input type="number" min="0" max="23" placeholder="時"
-                                   value="${dh || ''}"
-                                   onchange="updateDeathTime('${id}', this.value, null)">
-                            <input type="number" min="0" max="59" placeholder="分"
-                                   value="${dm || ''}"
-                                   onblur="updateDeathTime('${id}', null, this.value)">
+                    <div class="boss-actions">
+                        <div class="toggle-container">
+                            <span class="toggle-label">${alertEnabled ? '提醒中' : '不提醒'}</span>
+                            <div class="toggle ${alertEnabled ? 'active' : ''}" onclick="toggleAlert('${id}')"></div>
                         </div>
-                    </div>
-
-                    <div class="input-group">
-                        <label>⏰ 重生間隔(分鐘)</label>
-                        <input type="number" min="1" value="${respawnMinutes}"
-                            onchange="updateBoss('${id}','respawnMinutes',parseInt(this.value))">
-                    </div>
-
-                    <div class="input-group">
-                        <label>⚔️ 擊殺用時(分鐘)</label>
-                        <input type="number" min="0" value="${killTime}"
-                            onchange="updateBoss('${id}','killTime',parseInt(this.value))">
-                    </div>
-
-                    <div class="predict-times" data-boss-id="${id}">
-                        <strong>📅 未來4次重生時間:</strong><br>
-                        ${renderFutureText(futures)}
+                        <div class="controls">
+                            <button class="btn btn-primary" onclick="killBoss('${id}')">⚔️ 擊殺</button>
+                            <button class="btn btn-danger" onclick="deleteBoss('${id}')">🗑️ 刪除</button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="boss-right">
-                    <div class="toggle-container">
-                        <span class="toggle-label">提醒</span>
-                        <div class="toggle ${alertEnabled ? 'active':''}" onclick="toggleAlert('${id}')"></div>
+                <div class="boss-main">
+                    <div>
+                        <div class="input-group">
+                            <label>💀 死亡時間</label>
+                            <div class="time-input-row">
+                                <input type="number" min="0" max="23" placeholder="時"
+                                       value="${dh || ''}"
+                                       id="deathHour-${id}">
+                                <input type="number" min="0" max="59" placeholder="分"
+                                       value="${dm || ''}"
+                                       id="deathMin-${id}">
+                                <button class="btn btn-primary" style="padding:4px 10px;font-size:11px;"
+                                        onclick="applyDeathTime('${id}')">
+                                    套用
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="input-group" style="margin-top:6px;">
+                            <label>⏰ 重生間隔(分)</label>
+                            <input type="number" min="1" value="${respawnMinutes}"
+                                onchange="updateBoss('${id}','respawnMinutes',parseInt(this.value))">
+                        </div>
+
+                        <div class="input-group" style="margin-top:6px;">
+                            <label>⚔️ 擊殺用時(分)</label>
+                            <input type="number" min="0" value="${killTime}"
+                                onchange="updateBoss('${id}','killTime',parseInt(this.value))">
+                        </div>
                     </div>
-                    <div class="controls">
-                        <button class="btn btn-primary" onclick="killBoss('${id}')">⚔️ 擊殺</button>
-                        <button class="btn btn-danger" onclick="deleteBoss('${id}')">🗑️ 刪除</button>
+
+                    <div class="predict-times" data-boss-id="${id}">
+                        <strong>📅 未來4次</strong>
+                        ${renderFutureText(futures)}
                     </div>
                 </div>
             `;
@@ -661,25 +717,23 @@
                 const futures = predictNextSpawns({deathTime, respawnMinutes, killTime});
                 const card = document.querySelector(`.predict-times[data-boss-id="${boss.id}"]`);
                 if (card) {
-                    card.innerHTML = `<strong>📅 未來4次重生時間:</strong><br>${renderFutureText(futures)}`;
+                    card.innerHTML = `<strong>📅 未來4次</strong>${renderFutureText(futures)}`;
                 }
             });
         }
 
-        function updateDeathTime(id, hourPart, minutePart) {
-            const current = bosses[id]?.deathTime || '';
-            let [h, m] = current.split(':');
-            if (hourPart !== null && hourPart !== undefined && hourPart !== '') {
-                h = String(parseInt(hourPart, 10)).padStart(2,'0');
-            }
-            if (minutePart !== null && minutePart !== undefined && minutePart !== '') {
-                m = String(parseInt(minutePart, 10)).padStart(2,'0');
-            }
-            if (!h || isNaN(h)) h = '00';
-            if (!m || isNaN(m)) m = '00';
+        function applyDeathTime(id) {
+            const boss = bosses[id];
+            if (!boss) return;
+
+            const hourInput = document.getElementById(`deathHour-${id}`);
+            const minInput  = document.getElementById(`deathMin-${id}`);
+            if (!hourInput || !minInput) return;
+
+            const h = String(parseInt(hourInput.value || '0', 10)).padStart(2,'0');
+            const m = String(parseInt(minInput.value  || '0', 10)).padStart(2,'0');
             const value = `${h}:${m}`;
 
-            const boss = bosses[id];
             const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
             const killTime = boss.killTime || boss.killtime || 0;
             const nextSpawn = calcNextSpawn(value, respawnMinutes, killTime);
@@ -695,7 +749,7 @@
             }
 
             bossesRef.doc(id).update(updateData)
-                .catch(e => console.error('更新死亡時間失敗', e));
+                .catch(e => console.error('套用死亡時間失敗', e));
         }
 
         function updateBoss(id, field, value) {
@@ -705,7 +759,6 @@
                 lastUpdated: Date.now()
             };
 
-            // 若改的是 respawnMinutes 或 killTime，順便重算 nextSpawn
             if (field === 'respawnMinutes' || field === 'killTime') {
                 const deathTime = boss.deathTime || '';
                 const respawnMinutes = field === 'respawnMinutes'
@@ -772,7 +825,6 @@
             }
         }
 
-        // 讀 nextSpawn 來倒數
         function updateGlobalCountdown() {
             const countdownEl = document.getElementById('countdown');
 
@@ -894,7 +946,6 @@
         function openAddModal() { document.getElementById('addModal').style.display = 'block'; }
         function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
 
-        // 新增王：有死亡時間就先算 nextSpawn；沒有就等第一次擊殺
         async function addNewBoss() {
             const name = document.getElementById('newBossName').value.trim();
             let respawnMinutes = parseInt(document.getElementById('newRespawnMinutes').value || '60', 10);
@@ -916,7 +967,6 @@
                     });
                 }
 
-                // 新增時暫時沒有死亡時間
                 const bossDoc = {
                     ownerId: OWNER_ID,
                     name: name,
