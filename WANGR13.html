@@ -424,6 +424,7 @@
         let bosses = {};
         let soundEnabled = true;
 
+        // ★ 修正版：跨日處理
         function parseTimeToTodayMillis(timeStr) {
             if (!timeStr) return null;
             const parts = timeStr.split(':');
@@ -431,8 +432,16 @@
             const h = parseInt(parts[0], 10);
             const m = parseInt(parts[1], 10);
             if (isNaN(h) || isNaN(m)) return null;
+
             const now = new Date();
-            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+            let d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+
+            // 如果這個時間看起來在未來很多（預設 > 3 小時），視為前一天的時間
+            const diff = d.getTime() - now.getTime();
+            if (diff > 3 * 60 * 60 * 1000) {
+                d.setDate(d.getDate() - 1); // 往前一天 [web:119]
+            }
+
             return d.getTime();
         }
 
@@ -825,7 +834,7 @@
             }
         }
 
-        // 全域倒數改用 predictNextSpawns
+        // 全域倒數：用 predictNextSpawns 算最近一個
         function updateGlobalCountdown() {
             const countdownEl = document.getElementById('countdown');
 
