@@ -825,6 +825,7 @@
             }
         }
 
+        // 全域倒數改用 predictNextSpawns
         function updateGlobalCountdown() {
             const countdownEl = document.getElementById('countdown');
 
@@ -832,9 +833,17 @@
             let soonestName = '';
 
             Object.values(bosses).forEach(boss => {
-                const next = boss.nextSpawn;
-                if (next && next < soonestTime) {
-                    soonestTime = next;
+                const deathTime = boss.deathTime || '';
+                if (!deathTime) return;
+
+                const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
+                const killTime = boss.killTime || boss.killtime || 0;
+                const futures = predictNextSpawns({ deathTime, respawnMinutes, killTime });
+                if (!futures.length) return;
+
+                const first = futures[0];
+                if (first < soonestTime) {
+                    soonestTime = first;
                     soonestName = boss.name || '';
                 }
             });
