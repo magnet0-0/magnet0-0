@@ -384,6 +384,34 @@
         let bosses = {};
         let soundEnabled = true;
 
+        // ====== 通用時間工具 ======
+        function parseTimeToTodayMillis(timeStr) {
+            if (!timeStr) return null;
+            const parts = timeStr.split(':');
+            if (parts.length < 2) return null;
+            const h = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            if (isNaN(h) || isNaN(m)) return null;
+            const now = new Date();
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+            return d.getTime();
+        }
+
+        // 根據死亡時間 + 重生間隔 + 擊殺時間算下一次重生（確保在未來）
+        function calcNextSpawn(deathTime, respawnMinutes, killTime) {
+            const base = parseTimeToTodayMillis(deathTime);
+            if (base == null) return null;
+            const respawnMs = (respawnMinutes ?? 60) * 60000;
+            const killMs = (killTime ?? 0) * 60000;
+            let next = base + respawnMs + killMs;
+            const step = respawnMs + killMs;
+            const now = Date.now();
+            while (next <= now) {
+                next += step;
+            }
+            return next;
+        }
+
         function init() {
             loadBosses();
             setupSearch();
@@ -524,16 +552,7 @@
             statusEl.textContent = `共 ${total} 個王`;
         }
 
-        function parseTimeToTodayMillis(timeStr) {
-            if (!timeStr) return null;
-            const [h, m] = timeStr.split(':').map(x => parseInt(x, 10));
-            if (isNaN(h) || isNaN(m)) return null;
-            const now = new Date();
-            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
-            return d.getTime();
-        }
-
-        // 只給前端顯示用（未來 4 次），不寫回 nextSpawn；真正重生時間由後端算好塞進文件
+        // 只給前端顯示用（未來 4 次）
         function predictNextSpawns(boss) {
             const times = [];
             const killTime = boss.killTime || 0;
@@ -660,19 +679,54 @@
             if (!m || isNaN(m)) m = '00';
             const value = `${h}:${m}`;
 
-            bossesRef.doc(id).update({
+            const boss = bosses[id];
+            const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
+            const killTime = boss.killTime || boss.killtime || 0;
+            const nextSpawn = calcNextSpawn(value, respawnMinutes, killTime);
+
+            const updateData = {
                 deathTime: value,
                 lastUpdated: Date.now()
-                // 不動 nextSpawn，讓後端依主資料庫重算
-            }).catch(e => console.error('更新死亡時間失敗', e));
+            };
+            if (nextSpawn != null) {
+                updateData.nextSpawn = nextSpawn;
+                updateData.threeMinAlerted = false;
+                updateData.spawnAlerted = false;
+            }
+
+            bossesRef.doc(id).update(updateData)
+                .catch(e => console.error('更新死亡時間失敗', e));
         }
 
         function updateBoss(id, field, value) {
-            bossesRef.doc(id).update({
+            const boss = bosses[id];
+            const newData = {
                 [field]: value,
                 lastUpdated: Date.now()
-                // 一樣不改 nextSpawn
-            }).catch(e => console.error('更新失敗', e));
+            };
+
+            // 若改的是 respawnMinutes 或 killTime，順便重算 nextSpawn
+            if (field === 'respawnMinutes' || field === 'killTime') {
+                const deathTime = boss.deathTime || '';
+                const respawnMinutes = field === 'respawnMinutes'
+                    ? value
+                    : (boss.respawnMinutes ?? boss.respawn ?? 60);
+                const killTime = field === 'killTime'
+                    ? value
+                    : (boss.killTime || boss.killtime || 0);
+
+                if (deathTime) {
+                    const nextSpawn = calcNextSpawn(deathTime, respawnMinutes, killTime);
+                    if (nextSpawn != null) {
+                        newData.nextSpawn = nextSpawn;
+                        newData.threeMinAlerted = false;
+                        newData.spawnAlerted = false;
+                    }
+                }
+            }
+
+            bossesRef.doc(id).update(newData)
+                .catch(e => console.error('更新失敗', e));
         }
 
         function killBoss(id) {
@@ -680,13 +734,26 @@
             const hhmm = now.getHours().toString().padStart(2,'0') + ':' +
                          now.getMinutes().toString().padStart(2,'0');
 
-            bossesRef.doc(id).update({
+            const boss = bosses[id];
+            const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
+            const killTime = boss.killTime || boss.killtime || 0;
+
+            const nextSpawn = calcNextSpawn(hhmm, respawnMinutes, killTime);
+
+            const updateData = {
                 deathTime: hhmm,
                 lastkill: Date.now(),
                 lastkill_source: 'manual',
                 lastUpdated: Date.now()
-                // nextSpawn 交給後端
-            }).catch(e => console.error('擊殺更新失敗', e));
+            };
+            if (nextSpawn != null) {
+                updateData.nextSpawn = nextSpawn;
+                updateData.threeMinAlerted = false;
+                updateData.spawnAlerted = false;
+            }
+
+            bossesRef.doc(id).update(updateData)
+                .catch(e => console.error('擊殺更新失敗', e));
         }
 
         function toggleAlert(id) {
@@ -705,7 +772,7 @@
             }
         }
 
-        // 只讀後端寫入的 nextSpawn 來倒數
+        // 讀 nextSpawn 來倒數
         function updateGlobalCountdown() {
             const countdownEl = document.getElementById('countdown');
 
@@ -827,7 +894,7 @@
         function openAddModal() { document.getElementById('addModal').style.display = 'block'; }
         function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
 
-        // 新增王只建資料，不做任何時間計算；nextSpawn 由後端依主資料庫寫入
+        // 新增王：有死亡時間就先算 nextSpawn；沒有就等第一次擊殺
         async function addNewBoss() {
             const name = document.getElementById('newBossName').value.trim();
             let respawnMinutes = parseInt(document.getElementById('newRespawnMinutes').value || '60', 10);
@@ -849,7 +916,8 @@
                     });
                 }
 
-                await bossesRef.add({
+                // 新增時暫時沒有死亡時間
+                const bossDoc = {
                     ownerId: OWNER_ID,
                     name: name,
                     respawn: respawnMinutes,
@@ -862,7 +930,9 @@
                     notify: true,
                     alertEnabled: true,
                     lastUpdated: Date.now()
-                });
+                };
+
+                await bossesRef.add(bossDoc);
 
                 document.getElementById('newBossName').value = '';
                 document.getElementById('newRespawnMinutes').value = '60';
