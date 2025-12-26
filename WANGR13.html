@@ -391,7 +391,6 @@
             setupSoundToggle();
             setInterval(() => {
                 updateGlobalCountdown();
-                autoAdvanceNextSpawn();
                 checkBossAlerts();
                 updateFutureBlocks();
             }, 1000);
@@ -534,63 +533,41 @@
             return d.getTime();
         }
 
-        function calcRollingNextSpawn(boss, baseOverride) {
-            const deathTime = boss.deathTime;
-            if (!deathTime) return null;
-            const base = baseOverride ?? parseTimeToTodayMillis(deathTime);
-            if (!base) return null;
+        // 只給前端顯示用（未來 4 次），不寫回 nextSpawn；真正重生時間由後端算好塞進文件
+        function predictNextSpawns(boss) {
+            const times = [];
+            const killTime = boss.killTime || 0;
+            const base = parseTimeToTodayMillis(boss.deathTime) ?? Date.now();
+            const respawnMs = (boss.respawnMinutes ?? boss.respawn ?? 60) * 60000;
+            const killMs = killTime * 60000;
 
-            const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
-            const killTime = boss.killTime || boss.killtime || 0;
-            const interval = (respawnMinutes + killTime) * 60000;
-            if (interval <= 0) return null;
-
+            let next = base + respawnMs;
+            for (let i = 0; i < 4; i++) {
+                times.push(next);
+                next += respawnMs + killMs;
+            }
             const now = Date.now();
-            let next = base + interval;
-
-            if (next <= now) {
-                const passed = now - next;
-                const rounds = Math.floor(passed / interval) + 1;
-                next += rounds * interval;
+            while (times.length && times[0] <= now) {
+                const last = times[times.length - 1];
+                const step = respawnMs + killMs;
+                times.shift();
+                times.push(last + step);
             }
-            return next;
+            return times;
         }
 
-        function recalcNextSpawn(id, partial = {}) {
-            const b = {...bosses[id], ...partial};
-            return calcRollingNextSpawn(b);
-        }
-
-        function resetAlertFlags(extra = {}) {
-            return {
-                threeMinAlerted: false,
-                spawnAlerted: false,
-                ...extra
-            };
-        }
-
-        function updateDeathTime(id, hourPart, minutePart) {
-            const current = bosses[id]?.deathTime || '';
-            let [h, m] = current.split(':');
-            if (hourPart !== null && hourPart !== undefined && hourPart !== '') {
-                h = String(parseInt(hourPart, 10)).padStart(2,'0');
-            }
-            if (minutePart !== null && minutePart !== undefined && minutePart !== '') {
-                m = String(parseInt(minutePart, 10)).padStart(2,'0');
-            }
-            if (!h || isNaN(h)) h = '00';
-            if (!m || isNaN(m)) m = '00';
-            const value = `${h}:${m}`;
-
-            const nextSpawn = recalcNextSpawn(id, {deathTime: value});
-            const data = {
-                deathTime: value,
-                lastUpdated: Date.now(),
-                ...resetAlertFlags(nextSpawn ? { nextSpawn } : {})
-            };
-
-            bossesRef.doc(id).update(data)
-                .catch(e => console.error('更新死亡時間失敗', e));
+        function renderFutureText(list) {
+            if (!list.length) return '<div class="predict-item">--</div>';
+            return list.map((t,i)=>
+                `<div class="predict-item">第${i+1}次: ${
+                    new Date(t).toLocaleTimeString('zh-TW',{
+                        timeZone:'Asia/Taipei',
+                        hour:'2-digit',
+                        minute:'2-digit',
+                        hour12:false
+                    })
+                }</div>`
+            ).join('');
         }
 
         function createBossCard(id, boss) {
@@ -603,7 +580,9 @@
             const killTime = boss.killTime || boss.killtime || 0;
             const alertEnabled = boss.notify ?? boss.alertEnabled ?? true;
 
-            const futures = predictNextSpawns({deathTime, respawnMinutes, killTime});
+            const futures = deathTime
+                ? predictNextSpawns({deathTime, respawnMinutes, killTime})
+                : [];
 
             div.innerHTML = `
                 <div class="boss-main">
@@ -653,42 +632,6 @@
             return div;
         }
 
-        function renderFutureText(list) {
-            if (!list.length) return '<div class="predict-item">--</div>';
-            return list.map((t,i)=>
-                `<div class="predict-item">第${i+1}次: ${
-                    new Date(t).toLocaleTimeString('zh-TW',{
-                        timeZone:'Asia/Taipei',
-                        hour:'2-digit',
-                        minute:'2-digit',
-                        hour12:false
-                    })
-                }</div>`
-            ).join('');
-        }
-
-        function predictNextSpawns(boss) {
-            const times = [];
-            const killTime = boss.killTime || 0;
-            const base = parseTimeToTodayMillis(boss.deathTime) ?? Date.now();
-            const respawnMs = (boss.respawnMinutes ?? boss.respawn ?? 60) * 60000;
-            const killMs = killTime * 60000;
-
-            let next = base + respawnMs;
-            for (let i = 0; i < 4; i++) {
-                times.push(next);
-                next += respawnMs + killMs;
-            }
-            const now = Date.now();
-            while (times.length && times[0] <= now) {
-                const last = times[times.length - 1];
-                const step = respawnMs + killMs;
-                times.shift();
-                times.push(last + step);
-            }
-            return times;
-        }
-
         function updateFutureBlocks() {
             Object.values(bosses).forEach(boss => {
                 const deathTime = boss.deathTime || '';
@@ -704,38 +647,45 @@
             });
         }
 
-        function updateBoss(id, field, value) {
-            const partial = {[field]: value};
-            const nextSpawn = recalcNextSpawn(id, partial);
-            const data = {
-                [field]: value,
-                lastUpdated: Date.now(),
-                ...resetAlertFlags(nextSpawn ? { nextSpawn } : {})
-            };
+        function updateDeathTime(id, hourPart, minutePart) {
+            const current = bosses[id]?.deathTime || '';
+            let [h, m] = current.split(':');
+            if (hourPart !== null && hourPart !== undefined && hourPart !== '') {
+                h = String(parseInt(hourPart, 10)).padStart(2,'0');
+            }
+            if (minutePart !== null && minutePart !== undefined && minutePart !== '') {
+                m = String(parseInt(minutePart, 10)).padStart(2,'0');
+            }
+            if (!h || isNaN(h)) h = '00';
+            if (!m || isNaN(m)) m = '00';
+            const value = `${h}:${m}`;
 
-            bossesRef.doc(id).update(data)
-                .catch(e => console.error('更新失敗', e));
+            bossesRef.doc(id).update({
+                deathTime: value,
+                lastUpdated: Date.now()
+                // 不動 nextSpawn，讓後端依主資料庫重算
+            }).catch(e => console.error('更新死亡時間失敗', e));
+        }
+
+        function updateBoss(id, field, value) {
+            bossesRef.doc(id).update({
+                [field]: value,
+                lastUpdated: Date.now()
+                // 一樣不改 nextSpawn
+            }).catch(e => console.error('更新失敗', e));
         }
 
         function killBoss(id) {
-            const boss = bosses[id];
-            const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
-            const killTime = boss.killTime || boss.killtime || 0;
             const now = new Date();
             const hhmm = now.getHours().toString().padStart(2,'0') + ':' +
                          now.getMinutes().toString().padStart(2,'0');
-
-            const nextSpawn = calcRollingNextSpawn(
-                { deathTime: hhmm, respawnMinutes, killTime },
-                parseTimeToTodayMillis(hhmm)
-            );
 
             bossesRef.doc(id).update({
                 deathTime: hhmm,
                 lastkill: Date.now(),
                 lastkill_source: 'manual',
-                lastUpdated: Date.now(),
-                ...resetAlertFlags(nextSpawn ? { nextSpawn } : {})
+                lastUpdated: Date.now()
+                // nextSpawn 交給後端
             }).catch(e => console.error('擊殺更新失敗', e));
         }
 
@@ -755,6 +705,7 @@
             }
         }
 
+        // 只讀後端寫入的 nextSpawn 來倒數
         function updateGlobalCountdown() {
             const countdownEl = document.getElementById('countdown');
 
@@ -783,29 +734,37 @@
             }
         }
 
-        function autoAdvanceNextSpawn() {
-            const updates = [];
+        function play3MinAlert() {
+            if (!soundEnabled) return;
+            playBeep(3);
+        }
+
+        function playSpawnAlert() {
+            if (!soundEnabled) return;
+            playBeep(6);
+        }
+
+        function checkBossAlerts() {
+            const now = Date.now();
+            const THREE_MIN = 3 * 60 * 1000;
 
             Object.values(bosses).forEach(boss => {
-                if (!boss.deathTime) return;
+                if (!boss.nextSpawn || !(boss.notify ?? boss.alertEnabled ?? true)) return;
 
-                const calcNext = calcRollingNextSpawn(boss);
-                if (!calcNext) return;
+                const diff = boss.nextSpawn - now;
 
-                if (!boss.nextSpawn || Math.abs(calcNext - boss.nextSpawn) > 30000) {
-                    updates.push(
-                        bossesRef.doc(boss.id).update({
-                            nextSpawn: calcNext,
-                            threeMinAlerted: false,
-                            spawnAlerted: false
-                        }).catch(e => console.error('自動 advance nextSpawn 失敗', e))
-                    );
+                if (diff <= THREE_MIN && diff > 0 && !boss.threeMinAlerted) {
+                    play3MinAlert();
+                    bossesRef.doc(boss.id).update({ threeMinAlerted: true })
+                        .catch(e => console.error('更新 threeMinAlerted 失敗', e));
+                }
+
+                if (diff <= 0 && !boss.spawnAlerted) {
+                    playSpawnAlert();
+                    bossesRef.doc(boss.id).update({ spawnAlerted: true })
+                        .catch(e => console.error('更新 spawnAlerted 失敗', e));
                 }
             });
-
-            if (updates.length) {
-                Promise.allSettled(updates);
-            }
         }
 
         (function(){
@@ -847,39 +806,6 @@
             };
         })();
 
-        function play3MinAlert() {
-            if (!soundEnabled) return;
-            playBeep(3);
-        }
-
-        function playSpawnAlert() {
-            if (!soundEnabled) return;
-            playBeep(6);
-        }
-
-        function checkBossAlerts() {
-            const now = Date.now();
-            const THREE_MIN = 3 * 60 * 1000;
-
-            Object.values(bosses).forEach(boss => {
-                if (!boss.nextSpawn || !(boss.notify ?? boss.alertEnabled ?? true)) return;
-
-                const diff = boss.nextSpawn - now;
-
-                if (diff <= THREE_MIN && diff > 0 && !boss.threeMinAlerted) {
-                    play3MinAlert();
-                    bossesRef.doc(boss.id).update({ threeMinAlerted: true })
-                        .catch(e => console.error('更新 threeMinAlerted 失敗', e));
-                }
-
-                if (diff <= 0 && !boss.spawnAlerted) {
-                    playSpawnAlert();
-                    bossesRef.doc(boss.id).update({ spawnAlerted: true })
-                        .catch(e => console.error('更新 spawnAlerted 失敗', e));
-                }
-            });
-        }
-
         function setupVolume() {
             const slider = document.getElementById('volume');
             const label = document.getElementById('volumeValue');
@@ -901,7 +827,7 @@
         function openAddModal() { document.getElementById('addModal').style.display = 'block'; }
         function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
 
-        // ★ 修改後：新增王就用「未來四次中最接近現在的一次」當 nextSpawn
+        // 新增王只建資料，不做任何時間計算；nextSpawn 由後端依主資料庫寫入
         async function addNewBoss() {
             const name = document.getElementById('newBossName').value.trim();
             let respawnMinutes = parseInt(document.getElementById('newRespawnMinutes').value || '60', 10);
@@ -911,28 +837,6 @@
                 alert('請輸入王名稱');
                 return;
             }
-
-            // 先用現在時間當基準 deathTime
-            const now = new Date();
-            const hhmm = now.getHours().toString().padStart(2,'0') + ':' +
-                         now.getMinutes().toString().padStart(2,'0');
-
-            // 算出未來四次
-            const futures = predictNextSpawns({
-                deathTime: hhmm,
-                respawnMinutes,
-                killTime
-            });
-
-            // 從 futures 中找「最接近現在且 > 現在」的那一次
-            const nowMs = Date.now();
-            let best = null;
-            futures.forEach(t => {
-                if (t > nowMs && (best === null || t < best)) {
-                    best = t;
-                }
-            });
-            const nextSpawn = best || futures[0] || null;
 
             try {
                 const snap = await templatesRef.where('name','==',name).limit(1).get();
@@ -951,8 +855,8 @@
                     respawn: respawnMinutes,
                     respawnMinutes: respawnMinutes,
                     killTime: killTime,
-                    deathTime: hhmm,
-                    nextSpawn: nextSpawn,
+                    deathTime: '',
+                    nextSpawn: null,
                     threeMinAlerted: false,
                     spawnAlerted: false,
                     notify: true,
