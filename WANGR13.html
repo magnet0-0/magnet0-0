@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>王刷新監控系統 Firestore 版（兩欄卡片＋電報滴滴）</title>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft JhengHei', sans-serif;
+            background: radial-gradient(circle at top, #20254a 0, #050816 55%, #000 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding-top: 120px;
+        }
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 18px 40px;
+            background: linear-gradient(90deg, rgba(10,10,25,0.95), rgba(40,10,70,0.95));
+            border-bottom: 1px solid rgba(124, 229, 255, 0.3);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 1000;
+        }
+        #countdown {
+            font-size: 2.3em; font-weight: 800;
+            background: linear-gradient(120deg, #ff4b91, #ffe53b);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(255,75,145,0.7);
+            white-space: nowrap;
+        }
+        .search-container {
+            position: relative; flex: 1; max-width: 420px; margin: 0 20px;
+        }
+        #search {
+            width: 100%; padding: 12px 20px 12px 45px;
+            background: radial-gradient(circle at top left, rgba(36,63,120,0.95), rgba(10,18,40,0.95));
+            border: 1px solid rgba(124,229,255,0.45);
+            border-radius: 999px; color: #e9f3ff;
+            font-size: 15px; transition: all 0.3s;
+            box-shadow: 0 0 10px rgba(0,0,0,0.7);
+        }
+        #search:focus {
+            outline: none;
+            border-color: #7ce5ff;
+            box-shadow:
+                0 0 12px rgba(124,229,255,0.9),
+                0 0 40px rgba(0,0,0,0.9);
+        }
+        .search-icon {
+            position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+            color: #a8cfff; font-size: 16px;
+        }
+        .search-status {
+            position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+            font-size: 11px; color: #0ff;
+            background: rgba(7, 227, 255, 0.1);
+            padding: 3px 10px; border-radius: 999px;
+            border: 1px solid rgba(124,229,255,0.4);
+        }
+        .suggestions {
+            position: absolute; top: 110%; left: 0; right: 0;
+            background: #050816;
+            border-radius: 12px;
+            box-shadow: 0 14px 32px rgba(0,0,0,0.85);
+            max-height: 260px; overflow-y: auto; z-index: 20;
+            border: 1px solid rgba(124,229,255,0.4);
+        }
+        .suggestion-item {
+            padding: 10px 16px; cursor: pointer; font-size: 14px;
+            color: #e2ebff;
+        }
+        .suggestion-item:hover { background: rgba(124,229,255,0.12); }
+        #volumeControl { display: flex; align-items: center; gap: 10px; }
+        #volume {
+            width: 120px; height: 6px;
+            -webkit-appearance: none; appearance: none;
+            background: rgba(15, 40, 80, 0.9);
+            border-radius: 999px;
+            outline: none;
+            border: 1px solid rgba(124,229,255,0.45);
+        }
+        #volume::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 14px; height: 14px; border-radius: 50%;
+            background: radial-gradient(circle, #7ce5ff 0, #00e0ff 40%, #007dff 100%);
+            box-shadow: 0 0 10px rgba(124,229,255,0.9);
+            cursor: pointer;
+        }
+        .volume-label { font-size: 13px; }
+
+        .boss-cards {
+            max-width: 1240px;
+            margin: 80px auto 40px;
+            padding: 0 24px 24px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px 16px;
+            min-height: 400px;
+        }
+
+        .no-results {
+            grid-column: 1/-1; text-align: center; padding: 60px 20px;
+            color: #a8b3ff; font-size: 18px;
+            background: rgba(10,16,40,0.9);
+            border-radius: 18px; margin: 20px;
+            border: 1px dashed rgba(124,229,255,0.4);
+        }
+
+        .boss-card {
+            background: linear-gradient(135deg, rgba(6,14,40,0.98), rgba(15,30,70,0.98));
+            border-radius: 14px;
+            padding: 16px 18px;
+            position: relative;
+            border: 1px solid rgba(124,229,255,0.35);
+            transition: all 0.18s ease-out;
+            backdrop-filter: blur(10px);
+            box-shadow:
+                0 0 0 1px rgba(0,0,0,0.6),
+                0 14px 32px rgba(0,0,0,0.7);
+            overflow: hidden;
+        }
+        .boss-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(120deg, rgba(124,229,255,0.14), transparent 55%),
+                linear-gradient(-120deg, rgba(163,113,255,0.14), transparent 60%);
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        .boss-card:hover {
+            box-shadow:
+                0 0 0 1px rgba(124,229,255,0.7),
+                0 18px 40px rgba(0,0,0,0.9);
+            transform: translateY(-2px);
+        }
+
+        .boss-main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            column-gap: 14px;
+            row-gap: 6px;
+            position: relative;
+            z-index: 1;
+        }
+        .boss-name {
+            grid-column: 1 / -1;
+            font-size: 1.7em;
+            letter-spacing: 1.2px;
+            font-weight: 700;
+            color: #7ce5ff;
+            text-shadow:
+                0 0 10px rgba(124,229,255,0.8),
+                0 0 24px rgba(0,255,255,0.4);
+            margin-bottom: 4px;
+        }
+        .input-group { margin: 6px 0; }
+        .input-group label {
+            display: block; margin-bottom: 4px;
+            color: #a9b3ff; font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+        .input-group input {
+            width: 100%; height: 38px;
+            padding: 6px 10px;
+            background: rgba(6,10,30,0.95);
+            border: 1px solid rgba(124,229,255,0.25);
+            border-radius: 7px; color: #e9f3ff; font-size: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.7);
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #7ce5ff;
+            background: rgba(10,18,50,0.98);
+            box-shadow:
+                0 0 6px rgba(124,229,255,0.7),
+                inset 0 0 0 1px rgba(0,0,0,0.9);
+        }
+
+        .predict-times {
+            grid-column: 1 / -1;
+            background: linear-gradient(120deg, rgba(8,24,70,0.95), rgba(4,12,40,0.95));
+            padding: 10px 12px; border-radius: 10px; margin: 6px 0 0;
+            border-left: 3px solid #7ce5ff;
+            box-shadow: inset 0 0 0 1px rgba(50,100,200,0.35);
+            font-size: 13px;
+        }
+        .predict-times strong {
+            color: #7ce5ff;
+            text-shadow: 0 0 8px rgba(124,229,255,0.6);
+        }
+        .predict-item { margin: 2px 0; font-size: 12px; color: #dbe7ff; }
+
+        .boss-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+            margin-left: 16px;
+            min-width: 140px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .btn {
+            padding: 8px 14px; border: none; border-radius: 999px; cursor: pointer;
+            font-weight: 700; transition: all 0.18s; font-size: 13px;
+            letter-spacing: 0.5px;
+        }
+        .btn-primary {
+            background-image: linear-gradient(135deg, #7b5cff, #00e0ff);
+            color: #fff;
+            box-shadow: 0 0 12px rgba(0,224,255,0.65);
+        }
+        .btn-danger {
+            background-image: linear-gradient(135deg, #ff4b91, #ff8a3b);
+            color: #fff;
+            box-shadow: 0 0 12px rgba(255,75,145,0.7);
+        }
+        .btn-primary:hover, .btn-danger:hover {
+            transform: translateY(-1px) scale(1.03);
+            filter: brightness(1.05);
+        }
+
+        .toggle-container { display: flex; align-items: center; gap: 8px; }
+        .toggle-label { font-size: 13px; color: #ccc; }
+        .toggle {
+            width: 50px; height: 22px;
+            background: linear-gradient(135deg, #222, #111);
+            border-radius: 999px;
+            border: 1px solid rgba(124,229,255,0.45);
+            position: relative; cursor: pointer; transition: all 0.2s;
+            box-shadow: 0 0 10px rgba(0,0,0,0.8);
+        }
+        .toggle.active {
+            background: linear-gradient(135deg, #12fff7, #7b5cff);
+            box-shadow: 0 0 14px rgba(124,229,255,0.9);
+        }
+        .toggle::after {
+            content: ''; position: absolute; top: 2px; left: 2px;
+            width: 18px; height: 18px; background: #fff; border-radius: 50%;
+            transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.6);
+        }
+        .toggle.active::after { transform: translateX(26px); }
+
+        .add-boss-btn {
+            position: fixed; bottom: 30px; right: 30px;
+            width: 60px; height: 60px; border-radius: 50%;
+            background: radial-gradient(circle at 30% 20%, #7ce5ff, #00e0ff 45%, #007dff 100%);
+            border: 1px solid rgba(124,229,255,0.7);
+            font-size: 28px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(124,229,255,0.7);
+            transition: all 0.2s;
+            color: white; z-index: 100;
+        }
+        .add-boss-btn:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 0 26px rgba(124,229,255,0.95);
+        }
+
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; background: rgba(0,0,0,0.85);
+        }
+        .modal-content {
+            background: radial-gradient(circle at top, #1b2348, #050818);
+            margin: 10% auto; padding: 30px;
+            border-radius: 20px; width: 90%; max-width: 500px;
+            position: relative; animation: slideIn 0.3s;
+            border: 1px solid rgba(124,229,255,0.5);
+            box-shadow: 0 18px 45px rgba(0,0,0,0.9);
+        }
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to   { transform: translateY(0);      opacity: 1; }
+        }
+        .close { color: #a8cfff; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: #fff; }
+
+        @media (max-width: 900px) {
+            .header { flex-direction: column; gap: 10px; align-items: flex-start; }
+            #countdown { font-size: 1.9em; }
+            .boss-cards { grid-template-columns: 1fr; margin-top: 60px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div id="countdown">所有王已重生</div>
+        <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="search" placeholder="搜索王名稱...">
+            <span class="search-status" id="searchStatus">共 0 個王</span>
+            <div id="suggestions" class="suggestions" style="display:none;"></div>
+        </div>
+        <div id="volumeControl">
+            <span class="volume-label">🔊</span>
+            <input type="range" id="volume" min="0" max="100" step="1" value="50">
+            <span class="volume-label" id="volumeValue">50%</span>
+            <button id="soundToggleBtn"
+                    style="margin-left:10px;padding:6px 14px;border-radius:999px;
+                           border:1px solid #4dff4d;background:#091327;
+                           color:#4dff4d;font-size:12px;cursor:pointer;">
+                音效已開啟
+            </button>
+        </div>
+    </div>
+
+    <div class="boss-cards" id="bossCards"></div>
+
+    <button class="add-boss-btn" onclick="openAddModal()" title="新增王">+</button>
+
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeAddModal()">&times;</span>
+            <h2 style="margin-bottom:16px;color:#7ce5ff;text-shadow:0 0 12px rgba(124,229,255,0.7);">
+                新增王 (寫入 Firestore)
+            </h2>
+            <div class="input-group">
+                <label>王名稱</label>
+                <input type="text" id="newBossName" placeholder="輸入王名稱">
+            </div>
+            <div class="input-group">
+                <label>預設重生間隔(分鐘)</label>
+                <input type="number" id="newRespawnMinutes" value="60" min="1">
+            </div>
+            <div class="input-group">
+                <label>擊殺用時(分鐘)</label>
+                <input type="number" id="newKillTime" value="0" min="0">
+            </div>
+            <button class="btn btn-primary" onclick="addNewBoss()" style="width:100%;margin-top:20px;">新增王</button>
+        </div>
+    </div>
+
+    <script>
+        let masterVol = 0.8;
+        let audioCtx = null;
+
+        function getOrCreateOwnerId() {
+            const KEY = 'WANGR_OWNER_ID';
+            let id = localStorage.getItem(KEY);
+            if (id) return id;
+            const rand = Math.random().toString(36).slice(2);
+            const ts = Date.now().toString(36);
+            id = 'pc_' + ts + '_' + rand;
+            localStorage.setItem(KEY, id);
+            return id;
+        }
+
+        const OWNER_ID = getOrCreateOwnerId();
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyAgV1fpP2XRS5fhgg4h0clp9AEJqAJtypo",
+          authDomain: "wangr-sync.firebaseapp.com",
+          projectId: "wangr-sync",
+          storageBucket: "wangr-sync.firebasestorage.app",
+          messagingSenderId: "178110502200",
+          appId: "1:178110502200:web:adb5dc30cf34c5f0dc9dcd",
+          measurementId: "G-ZN1H4KHEJR"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const bossesRef = db.collection('bosses');
+        const bossNamesRef = db.collection('boss_events');
+        const templatesRef = db.collection('boss_templates');
+
+        let bosses = {};
+        let soundEnabled = true;
+
+        function init() {
+            loadBosses();
+            setupSearch();
+            setupVolume();
+            setupSoundToggle();
+            setInterval(() => {
+                updateGlobalCountdown();
+                autoAdvanceNextSpawn();
+                checkBossAlerts();
+                updateFutureBlocks();   // 新增：每秒重算未來4次文字
+            }, 1000);
+        }
+
+        function loadBosses() {
+            bossesRef.where('ownerId','==',OWNER_ID)
+                .onSnapshot((snap) => {
+                    const data = {};
+                    snap.forEach(doc => {
+                        data[doc.id] = { id: doc.id, ...doc.data() };
+                    });
+                    bosses = data;
+                    renderBossCards();
+                    updateSearchStatus();
+                }, (err) => {
+                    console.error('載入 bosses 發生錯誤：', err);
+                    document.getElementById('searchStatus').textContent = '讀取錯誤';
+                });
+        }
+
+        function setupSearch() {
+            const searchInput = document.getElementById('search');
+            const suggBox = document.getElementById('suggestions');
+
+            let allBossNames = [];
+
+            bossNamesRef.onSnapshot((snap) => {
+                const seen = new Set();
+                const list = [];
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    const name = data.boss;
+                    if (!name) return;
+                    if (!seen.has(name)) {
+                        seen.add(name);
+                        list.push(name);
+                    }
+                });
+                allBossNames = list;
+            }, (err) => {
+                console.error('同步 boss_events 錯誤', err);
+            });
+
+            searchInput.addEventListener('input', (e) => {
+                const keyword = e.target.value.trim();
+                if (!keyword) {
+                    suggBox.style.display = 'none';
+                    suggBox.innerHTML = '';
+                    return;
+                }
+
+                const lower = keyword.toLowerCase();
+                const results = allBossNames.filter(n =>
+                    n.toLowerCase().includes(lower)
+                ).slice(0, 50);
+
+                if (results.length === 0) {
+                    suggBox.innerHTML = `<div class="suggestion-item">沒有找到「${keyword}」的王名</div>`;
+                } else {
+                    suggBox.innerHTML = results.map(n =>
+                        `<div class="suggestion-item" onclick="chooseBossName('${n.replace(/'/g,"'")}')">${n}</div>`
+                    ).join('');
+                }
+                suggBox.style.display = 'block';
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!document.querySelector('.search-container').contains(e.target)) {
+                    suggBox.style.display = 'none';
+                }
+            });
+        }
+
+        function setupSoundToggle() {
+            const btn = document.getElementById('soundToggleBtn');
+
+            function refreshLabel() {
+                btn.textContent = soundEnabled ? '音效已開啟' : '啟用音效';
+                btn.style.color = soundEnabled ? '#4dff4d' : '#7ce5ff';
+                btn.style.borderColor = soundEnabled ? '#4dff4d' : 'rgba(124,229,255,0.7)';
+            }
+            refreshLabel();
+
+            btn.addEventListener('click', async () => {
+                soundEnabled = !soundEnabled;
+                refreshLabel();
+                try {
+                    if (!audioCtx) {
+                        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    if (audioCtx.state === 'suspended') {
+                        await audioCtx.resume();
+                    }
+                } catch(e) {}
+                if (soundEnabled) {
+                    playBeep(2);
+                }
+            });
+        }
+
+        function chooseBossName(name) {
+            const suggBox = document.getElementById('suggestions');
+            suggBox.style.display = 'none';
+            document.getElementById('search').value = name;
+            openAddModal();
+            document.getElementById('newBossName').value = name;
+        }
+
+        function renderBossCards() {
+            const container = document.getElementById('bossCards');
+            container.innerHTML = '';
+
+            const entries = Object.entries(bosses);
+            if (entries.length === 0) {
+                const noResult = document.createElement('div');
+                noResult.className = 'no-results';
+                noResult.innerHTML = `目前尚未新增任何王，請從上方搜尋王名後新增。`;
+                container.appendChild(noResult);
+                return;
+            }
+
+            entries.forEach(([id, boss]) => {
+                container.appendChild(createBossCard(id, boss));
+            });
+        }
+
+        function updateSearchStatus() {
+            const statusEl = document.getElementById('searchStatus');
+            const total = Object.keys(bosses).length;
+            statusEl.textContent = `共 ${total} 個王`;
+        }
+
+        function parseTimeToTodayMillis(timeStr) {
+            if (!timeStr) return null;
+            const [h, m] = timeStr.split(':').map(x => parseInt(x, 10));
+            if (isNaN(h) || isNaN(m)) return null;
+            const now = new Date();
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+            return d.getTime();
+        }
+
+        function calcRollingNextSpawn(boss, baseOverride) {
+            const deathTime = boss.deathTime;
+            if (!deathTime) return null;
+            const base = baseOverride ?? parseTimeToTodayMillis(deathTime);
+            if (!base) return null;
+
+            const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
+            const killTime = boss.killTime || boss.killtime || 0;
+            const interval = (respawnMinutes + killTime) * 60000;
+            if (interval <= 0) return null;
+
+            const now = Date.now();
+            let next = base + interval;
+
+            if (next <= now) {
+                const passed = now - next;
+                const rounds = Math.floor(passed / interval) + 1;
+                next += rounds * interval;
+            }
+            return next;
+        }
+
+        function recalcNextSpawn(id, partial = {}) {
+            const b = {...bosses[id], ...partial};
+            return calcRollingNextSpawn(b);
+        }
+
+        function resetAlertFlags(extra = {}) {
+            return {
+                threeMinAlerted: false,
+                spawnAlerted: false,
+                ...extra
+            };
+        }
+
+        function updateDeathTime(id, hourPart, minutePart) {
+            const current = bosses[id]?.deathTime || '';
+            let [h, m] = current.split(':');
+            if (hourPart !== null && hourPart !== undefined && hourPart !== '') {
+                h = String(parseInt(hourPart, 10)).padStart(2,'0');
+            }
+            if (minutePart !== null && minutePart !== undefined && minutePart !== '') {
+                m = String(parseInt(minutePart, 10)).padStart(2,'0');
+            }
+            if (!h || isNaN(h)) h = '00';
+            if (!m || isNaN(m)) m = '00';
+            const value = `${h}:${m}`;
+
+            const nextSpawn = recalcNextSpawn(id, {deathTime: value});
+            const data = {
+                deathTime: value,
+                lastUpdated: Date.now(),
+                ...resetAlertFlags(nextSpawn ? { nextSpawn } : {})
+            };
+
+            bossesRef.doc(id).update(data)
+                .catch(e => console.error('更新死亡時間失敗', e));
+        }
+
+        function createBossCard(id, boss) {
+            const div = document.createElement('div');
+            div.className = 'boss-card';
+
+            const deathTime = boss.deathTime || '';
+            const [dh, dm] = deathTime.split(':');
+            const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
+            const killTime = boss.killTime || boss.killtime || 0;
+            const alertEnabled = boss.notify ?? boss.alertEnabled ?? true;
+
+            const futures = predictNextSpawns({deathTime, respawnMinutes, killTime});
+
+            div.innerHTML = `
+                <div class="boss-main">
+                    <div class="boss-name">${boss.name || '未知王'}</div>
+
+                    <div class="input-group">
+                        <label>💀 死亡時間</label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="number" min="0" max="23" placeholder="時"
+                                   value="${dh || ''}"
+                                   onchange="updateDeathTime('${id}', this.value, null)">
+                            <input type="number" min="0" max="59" placeholder="分"
+                                   value="${dm || ''}"
+                                   onblur="updateDeathTime('${id}', null, this.value)">
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>⏰ 重生間隔(分鐘)</label>
+                        <input type="number" min="1" value="${respawnMinutes}"
+                            onchange="updateBoss('${id}','respawnMinutes',parseInt(this.value))">
+                    </div>
+
+                    <div class="input-group">
+                        <label>⚔️ 擊殺用時(分鐘)</label>
+                        <input type="number" min="0" value="${killTime}"
+                            onchange="updateBoss('${id}','killTime',parseInt(this.value))">
+                    </div>
+
+                    <div class="predict-times" data-boss-id="${id}">
+                        <strong>📅 未來4次重生時間:</strong><br>
+                        ${renderFutureText(futures)}
+                    </div>
+                </div>
+
+                <div class="boss-right">
+                    <div class="toggle-container">
+                        <span class="toggle-label">提醒</span>
+                        <div class="toggle ${alertEnabled ? 'active':''}" onclick="toggleAlert('${id}')"></div>
+                    </div>
+                    <div class="controls">
+                        <button class="btn btn-primary" onclick="killBoss('${id}')">⚔️ 擊殺</button>
+                        <button class="btn btn-danger" onclick="deleteBoss('${id}')">🗑️ 刪除</button>
+                    </div>
+                </div>
+            `;
+            return div;
+        }
+
+        function renderFutureText(list) {
+            if (!list.length) return '<div class="predict-item">--</div>';
+            return list.map((t,i)=>
+                `<div class="predict-item">第${i+1}次: ${
+                    new Date(t).toLocaleTimeString('zh-TW',{
+                        timeZone:'Asia/Taipei',
+                        hour:'2-digit',
+                        minute:'2-digit',
+                        hour12:false
+                    })
+                }</div>`
+            ).join('');
+        }
+
+        function predictNextSpawns(boss) {
+            const times = [];
+            const killTime = boss.killTime || 0;
+            const base = parseTimeToTodayMillis(boss.deathTime) ?? Date.now();
+            const respawnMs = (boss.respawnMinutes ?? boss.respawn ?? 60) * 60000;
+            const killMs = killTime * 60000;
+
+            let next = base + respawnMs;
+            for (let i = 0; i < 4; i++) {
+                times.push(next);
+                next += respawnMs + killMs;
+            }
+            // 動態滾動：把已經過去的移到後面
+            const now = Date.now();
+            while (times.length && times[0] <= now) {
+                const last = times[times.length - 1];
+                const step = respawnMs + killMs;
+                times.shift();
+                times.push(last + step);
+            }
+            return times;
+        }
+
+        function updateFutureBlocks() {
+            Object.values(bosses).forEach(boss => {
+                const deathTime = boss.deathTime || '';
+                const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
+                const killTime = boss.killTime || boss.killtime || 0;
+                if (!deathTime) return;
+
+                const futures = predictNextSpawns({deathTime, respawnMinutes, killTime});
+                const card = document.querySelector(`.predict-times[data-boss-id="${boss.id}"]`);
+                if (card) {
+                    card.innerHTML = `<strong>📅 未來4次重生時間:</strong><br>${renderFutureText(futures)}`;
+                }
+            });
+        }
+
+        function updateBoss(id, field, value) {
+            const partial = {[field]: value};
+            const nextSpawn = recalcNextSpawn(id, partial);
+            const data = {
+                [field]: value,
+                lastUpdated: Date.now(),
+                ...resetAlertFlags(nextSpawn ? { nextSpawn } : {})
+            };
+
+            bossesRef.doc(id).update(data)
+                .catch(e => console.error('更新失敗', e));
+        }
+
+        function killBoss(id) {
+            const boss = bosses[id];
+            const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
+            const killTime = boss.killTime || boss.killtime || 0;
+            const now = new Date();
+            const hhmm = now.getHours().toString().padStart(2,'0') + ':' +
+                         now.getMinutes().toString().padStart(2,'0');
+
+            const nextSpawn = calcRollingNextSpawn(
+                { deathTime: hhmm, respawnMinutes, killTime },
+                parseTimeToTodayMillis(hhmm)
+            );
+
+            bossesRef.doc(id).update({
+                deathTime: hhmm,
+                lastkill: Date.now(),
+                lastkill_source: 'manual',
+                lastUpdated: Date.now(),
+                ...resetAlertFlags(nextSpawn ? { nextSpawn } : {})
+            }).catch(e => console.error('擊殺更新失敗', e));
+        }
+
+        function toggleAlert(id) {
+            const current = bosses[id];
+            const enabled = !(current.notify ?? current.alertEnabled ?? true);
+            bossesRef.doc(id).update({
+                notify: enabled,
+                alertEnabled: enabled
+            }).catch(e => console.error('切換提醒失敗', e));
+        }
+
+        function deleteBoss(id) {
+            const name = bosses[id]?.name || '此王';
+            if (confirm(`確認刪除 ${name} ?`)) {
+                bossesRef.doc(id).delete().catch(e => console.error('刪除失敗', e));
+            }
+        }
+
+        function updateGlobalCountdown() {
+            const countdownEl = document.getElementById('countdown');
+
+            let soonestTime = Infinity;
+            let soonestName = '';
+
+            Object.values(bosses).forEach(boss => {
+                const next = boss.nextSpawn;
+                if (next && next < soonestTime) {
+                    soonestTime = next;
+                    soonestName = boss.name || '';
+                }
+            });
+
+            if (soonestTime !== Infinity && soonestTime > Date.now()) {
+                const diff = soonestTime - Date.now();
+                const h = Math.floor(diff / 3600000);
+                const m = Math.floor((diff % 3600000) / 60000);
+                const s = Math.floor((diff % 60000) / 1000);
+                const timeText = `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                countdownEl.textContent = soonestName
+                    ? `${soonestName}  ${timeText}`
+                    : timeText;
+            } else {
+                countdownEl.textContent = '所有王已重生';
+            }
+        }
+
+        function autoAdvanceNextSpawn() {
+            const updates = [];
+
+            Object.values(bosses).forEach(boss => {
+                if (!boss.deathTime) return;
+
+                const calcNext = calcRollingNextSpawn(boss);
+                if (!calcNext) return;
+
+                if (!boss.nextSpawn || Math.abs(calcNext - boss.nextSpawn) > 30000) {
+                    updates.push(
+                        bossesRef.doc(boss.id).update({
+                            nextSpawn: calcNext,
+                            threeMinAlerted: false,
+                            spawnAlerted: false
+                        }).catch(e => console.error('自動 advance nextSpawn 失敗', e))
+                    );
+                }
+            });
+
+            if (updates.length) {
+                Promise.allSettled(updates);
+            }
+        }
+
+        (function(){
+            let inited = false;
+
+            function ensureAudio(){
+                if(!audioCtx){
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if(audioCtx && audioCtx.state === "suspended"){
+                    audioCtx.resume();
+                }
+            }
+
+            if(!inited){
+                ["click","keydown","touchstart"].forEach(evt=>{
+                    window.addEventListener(evt, ensureAudio, { once:true });
+                });
+                inited = true;
+            }
+
+            window.playBeep = function(times){
+                ensureAudio();
+                if(!audioCtx) return;
+                if(typeof masterVol !== "number") masterVol = 0.8;
+                if(masterVol <= 0) return;
+
+                for(let i=0;i<times;i++){
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.type = "square";
+                    o.frequency.value = 880;
+                    g.gain.value = masterVol;
+                    o.connect(g); g.connect(audioCtx.destination);
+                    const t = audioCtx.currentTime + i * 0.25;
+                    o.start(t);
+                    o.stop(t + 0.15);
+                }
+            };
+        })();
+
+        function play3MinAlert() {
+            if (!soundEnabled) return;
+            playBeep(3);
+        }
+
+        function playSpawnAlert() {
+            if (!soundEnabled) return;
+            playBeep(6);
+        }
+
+        function checkBossAlerts() {
+            const now = Date.now();
+            const THREE_MIN = 3 * 60 * 1000;
+
+            Object.values(bosses).forEach(boss => {
+                if (!boss.nextSpawn || !(boss.notify ?? boss.alertEnabled ?? true)) return;
+
+                const diff = boss.nextSpawn - now;
+
+                if (diff <= THREE_MIN && diff > 0 && !boss.threeMinAlerted) {
+                    play3MinAlert();
+                    bossesRef.doc(boss.id).update({ threeMinAlerted: true })
+                        .catch(e => console.error('更新 threeMinAlerted 失敗', e));
+                }
+
+                if (diff <= 0 && !boss.spawnAlerted) {
+                    playSpawnAlert();
+                    bossesRef.doc(boss.id).update({ spawnAlerted: true })
+                        .catch(e => console.error('更新 spawnAlerted 失敗', e));
+                }
+            });
+        }
+
+        function setupVolume() {
+            const slider = document.getElementById('volume');
+            const label = document.getElementById('volumeValue');
+            if (!slider || !label) return;
+
+            const saved = Number(localStorage.getItem('masterVol'));
+            masterVol = isNaN(saved) ? 0.5 : saved;
+            slider.value = Math.round(masterVol * 100);
+            label.textContent = Math.round(masterVol * 100) + '%';
+
+            slider.addEventListener('input', e => {
+                const v = Number(e.target.value) / 100;
+                masterVol = v;
+                localStorage.setItem('masterVol', masterVol);
+                label.textContent = Math.round(masterVol * 100) + '%';
+            });
+        }
+
+        function openAddModal() { document.getElementById('addModal').style.display = 'block'; }
+        function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
+
+        async function addNewBoss() {
+            const name = document.getElementById('newBossName').value.trim();
+            let respawnMinutes = parseInt(document.getElementById('newRespawnMinutes').value || '60', 10);
+            let killTime = parseInt(document.getElementById('newKillTime').value || '0', 10);
+
+            if (!name) {
+                alert('請輸入王名稱');
+                return;
+            }
+
+            try {
+                const snap = await templatesRef.where('name','==',name).limit(1).get();
+                if (snap.empty) {
+                    await templatesRef.add({
+                        name,
+                        respawnMinutes,
+                        killTime,
+                        createdAt: Date.now()
+                    });
+                }
+
+                await bossesRef.add({
+                    ownerId: OWNER_ID,
+                    name: name,
+                    respawn: respawnMinutes,
+                    respawnMinutes: respawnMinutes,
+                    killTime: killTime,
+                    deathTime: '',
+                    nextSpawn: null,
+                    threeMinAlerted: false,
+                    spawnAlerted: false,
+                    notify: true,
+                    alertEnabled: true,
+                    lastUpdated: Date.now()
+                });
+
+                document.getElementById('newBossName').value = '';
+                document.getElementById('newRespawnMinutes').value = '60';
+                document.getElementById('newKillTime').value = '0';
+                closeAddModal();
+            } catch (e) {
+                console.error('新增失敗', e);
+                alert('新增失敗：' + e.message);
+            }
+        }
+
+        window.onclick = function(e) {
+            const modal = document.getElementById('addModal');
+            if (e.target === modal) closeAddModal();
+        };
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
