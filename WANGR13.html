@@ -393,7 +393,6 @@
         let bosses = {};
         let soundEnabled = true;
 
-        // 本地狀態：不寫回 DB
         const localRuntime = {
             alerts: {},  // bossId -> {threeMinAlerted, spawnAlerted}
             shared: {}   // bossName -> {lastDeathTime, nextSpawn, respawnMinutes, killTime}
@@ -418,11 +417,15 @@
             if (baseMillis == null) return null;
             const respawnMs = (respawnMinutes ?? 60) * 60000;
             const killMs = (killTime ?? 0) * 60000;
-            let next = baseMillis + respawnMs + killMs;
             const step = respawnMs + killMs;
             const now = Date.now();
-            while (next <= now) next += step;
-            return next;
+
+            const firstSpawn = baseMillis + step;
+            if (firstSpawn > now) return firstSpawn;
+
+            const passed = now - baseMillis;
+            const k = Math.floor(passed / step);
+            return baseMillis + (k + 1) * step;
         }
 
         function init() {
@@ -570,7 +573,6 @@
         }
 
         function predictNextSpawns(boss) {
-            const times = [];
             const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
             const killTime = boss.killTime || boss.killtime || 0;
 
@@ -586,21 +588,26 @@
 
             const respawnMs = respawnMinutes * 60000;
             const killMs = killTime * 60000;
-            let next = baseMillis + respawnMs + killMs;
             const step = respawnMs + killMs;
-
-            for (let i = 0; i < 4; i++) {
-                times.push(next);
-                next += step;
-            }
-
             const now = Date.now();
-            while (times.length && times[0] <= now) {
-                const last = times[times.length - 1];
-                times.shift();
-                times.push(last + step);
+
+            const firstSpawn = baseMillis + step;
+            let startSpawn;
+
+            if (firstSpawn > now) {
+                startSpawn = firstSpawn;
+            } else {
+                const passed = now - baseMillis;
+                const k = Math.floor(passed / step);
+                startSpawn = baseMillis + (k + 1) * step;
             }
-            return times;
+
+            return [
+                startSpawn,
+                startSpawn + step,
+                startSpawn + 2 * step,
+                startSpawn + 3 * step
+            ];
         }
 
         function renderFutureText(list) {
@@ -979,7 +986,6 @@
             }
 
             try {
-                // 讀取共用 boss_state，看有沒有最近死亡/重生時間
                 let shared = null;
                 try {
                     const stateSnap = await bossStateRef.doc(name).get();
