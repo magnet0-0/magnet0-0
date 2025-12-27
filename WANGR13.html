@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>王刷新監控系統 Firestore 版（兩欄卡片＋電報滴滴）</title>
+    <title>王刷新監控系統 Firestore 版（優化＋共用狀態）</title>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <style>
+        /* === 你的原本 CSS 幾乎維持不動，略 === */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Microsoft JhengHei', sans-serif;
@@ -32,9 +33,7 @@
             text-shadow: 0 0 20px rgba(255,75,145,0.7);
             white-space: nowrap;
         }
-        .search-container {
-            position: relative; flex: 1; max-width: 420px; margin: 0 20px;
-        }
+        .search-container { position: relative; flex: 1; max-width: 420px; margin: 0 20px; }
         #search {
             width: 100%; padding: 12px 20px 12px 45px;
             background: radial-gradient(circle at top left, rgba(36,63,120,0.95), rgba(10,18,40,0.95));
@@ -74,6 +73,7 @@
             color: #e2ebff;
         }
         .suggestion-item:hover { background: rgba(124,229,255,0.12); }
+
         #volumeControl { display: flex; align-items: center; gap: 10px; }
         #volume {
             width: 120px; height: 6px;
@@ -101,7 +101,6 @@
             gap: 16px 16px;
             min-height: 400px;
         }
-
         .no-results {
             grid-column: 1/-1; text-align: center; padding: 60px 20px;
             color: #a8b3ff; font-size: 18px;
@@ -109,7 +108,6 @@
             border-radius: 18px; margin: 20px;
             border: 1px dashed rgba(124,229,255,0.4);
         }
-
         .boss-card {
             display: flex;
             flex-direction: column;
@@ -128,16 +126,8 @@
             box-shadow: 0 16px 32px rgba(0,0,0,0.85);
             transform: translateY(-1px);
         }
-
-        .boss-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .boss-title-block {
-            flex: 1;
-            min-width: 0;
-        }
+        .boss-header { display: flex; align-items: center; gap: 12px; }
+        .boss-title-block { flex: 1; min-width: 0; }
         .boss-name {
             font-size: 1.6em;
             font-weight: 700;
@@ -158,17 +148,8 @@
                 0 0 10px rgba(124,229,255,0.95),
                 0 0 20px rgba(0,0,0,0.9);
         }
-
-        .boss-actions {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .controls {
-            display: flex;
-            gap: 6px;
-        }
+        .boss-actions { display: flex; align-items: center; gap: 8px; }
+        .controls { display: flex; gap: 6px; }
         .btn {
             padding: 6px 12px;
             border: none;
@@ -200,7 +181,6 @@
             gap: 10px;
             margin-top: 4px;
         }
-
         .input-group { margin: 0; }
         .input-group label {
             display: block;
@@ -229,12 +209,7 @@
                 0 0 6px rgba(124,229,255,0.7),
                 inset 0 0 0 1px rgba(0,0,0,0.9);
         }
-
-        .time-input-row {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-        }
+        .time-input-row { display: flex; gap: 6px; align-items: center; }
         .time-input-row input { width: 100%; }
 
         .predict-times {
@@ -258,11 +233,7 @@
             margin-top: 0;
         }
 
-        .toggle-container {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
+        .toggle-container { display: flex; align-items: center; gap: 6px; }
         .toggle-label {
             font-size: 11px;
             color: rgba(220,230,255,0.85);
@@ -293,9 +264,7 @@
             background: linear-gradient(135deg, #26ffb3, #4ea3ff);
             box-shadow: 0 0 12px rgba(124,229,255,0.9);
         }
-        .toggle.active::after {
-            transform: translateX(22px);
-        }
+        .toggle.active::after { transform: translateX(22px); }
 
         .add-boss-btn {
             position: fixed; bottom: 30px; right: 30px;
@@ -420,11 +389,19 @@
         const bossesRef = db.collection('bosses');
         const bossNamesRef = db.collection('boss_events');
         const templatesRef = db.collection('boss_templates');
+        const bossStateRef = db.collection('boss_state'); // 全伺服器共用王狀態 [web:38]
 
         let bosses = {};
         let soundEnabled = true;
 
-        // ★ 修正版：跨日處理
+        // 本地狀態：不寫回 DB，避免爆流量
+        const localRuntime = {
+            // bossId -> { threeMinAlerted: bool, spawnAlerted: bool }
+            alerts: {},
+            // bossName -> shared state from boss_state
+            shared: {}
+        };
+
         function parseTimeToTodayMillis(timeStr) {
             if (!timeStr) return null;
             const parts = timeStr.split(':');
@@ -436,27 +413,27 @@
             const now = new Date();
             let d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
 
-            // 如果這個時間看起來在未來很多（預設 > 3 小時），視為前一天的時間
             const diff = d.getTime() - now.getTime();
             if (diff > 3 * 60 * 60 * 1000) {
-                d.setDate(d.getDate() - 1); // 往前一天 [web:119]
+                d.setDate(d.getDate() - 1);
             }
-
             return d.getTime();
         }
 
-        function calcNextSpawn(deathTime, respawnMinutes, killTime) {
-            const base = parseTimeToTodayMillis(deathTime);
-            if (base == null) return null;
+        function calcNextSpawnMillis(baseMillis, respawnMinutes, killTime) {
+            if (baseMillis == null) return null;
             const respawnMs = (respawnMinutes ?? 60) * 60000;
             const killMs = (killTime ?? 0) * 60000;
-            let next = base + respawnMs + killMs;
+            let next = baseMillis + respawnMs + killMs;
             const step = respawnMs + killMs;
             const now = Date.now();
-            while (next <= now) {
-                next += step;
-            }
+            while (next <= now) next += step;
             return next;
+        }
+
+        function calcNextSpawnFromHHMM(hhmm, respawnMinutes, killTime) {
+            const base = parseTimeToTodayMillis(hhmm);
+            return calcNextSpawnMillis(base, respawnMinutes, killTime);
         }
 
         function init() {
@@ -527,7 +504,7 @@
                     suggBox.innerHTML = `<div class="suggestion-item">沒有找到「${keyword}」的王名</div>`;
                 } else {
                     suggBox.innerHTML = results.map(n =>
-                        `<div class="suggestion-item" onclick="chooseBossName('${n.replace(/'/g,"'")}')">${n}</div>`
+                        `<div class="suggestion-item" onclick="chooseBossName('${n.replace(/'/g,"\\'")}')">${n}</div>`
                     ).join('');
                 }
                 suggBox.style.display = 'block';
@@ -599,22 +576,38 @@
             statusEl.textContent = `共 ${total} 個王`;
         }
 
+        function getSharedStateForBossName(name) {
+            return localRuntime.shared[name] || null;
+        }
+
         function predictNextSpawns(boss) {
             const times = [];
             const killTime = boss.killTime || 0;
-            const base = parseTimeToTodayMillis(boss.deathTime) ?? Date.now();
-            const respawnMs = (boss.respawnMinutes ?? boss.respawn ?? 60) * 60000;
+            const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
+
+            // 先看有沒有共用狀態
+            const shared = getSharedStateForBossName(boss.name || '');
+            let baseMillis = null;
+            if (shared && shared.lastDeathTime) {
+                baseMillis = shared.lastDeathTime;
+            } else if (boss.deathTime) {
+                baseMillis = parseTimeToTodayMillis(boss.deathTime);
+            } else {
+                return [];
+            }
+
+            const respawnMs = respawnMinutes * 60000;
             const killMs = killTime * 60000;
 
-            let next = base + respawnMs;
+            let next = baseMillis + respawnMs + killMs;
+            const step = respawnMs + killMs;
             for (let i = 0; i < 4; i++) {
                 times.push(next);
-                next += respawnMs + killMs;
+                next += step;
             }
             const now = Date.now();
             while (times.length && times[0] <= now) {
                 const last = times[times.length - 1];
-                const step = respawnMs + killMs;
                 times.shift();
                 times.push(last + step);
             }
@@ -645,16 +638,17 @@
             const killTime = boss.killTime || boss.killtime || 0;
             const alertEnabled = boss.notify ?? boss.alertEnabled ?? true;
 
-            const futures = deathTime
-                ? predictNextSpawns({deathTime, respawnMinutes, killTime})
-                : [];
-
+            const futures = predictNextSpawns(boss);
             let subText = '待擊殺';
             if (futures.length > 0) {
                 const first = new Date(futures[0]);
                 const hh = String(first.getHours()).padStart(2,'0');
                 const mm = String(first.getMinutes()).padStart(2,'0');
                 subText = `下一次重生  ${hh}:${mm}`;
+            }
+
+            if (!localRuntime.alerts[id]) {
+                localRuntime.alerts[id] = { threeMinAlerted: false, spawnAlerted: false };
             }
 
             div.innerHTML = `
@@ -718,12 +712,7 @@
 
         function updateFutureBlocks() {
             Object.values(bosses).forEach(boss => {
-                const deathTime = boss.deathTime || '';
-                const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
-                const killTime = boss.killTime || boss.killtime || 0;
-                if (!deathTime) return;
-
-                const futures = predictNextSpawns({deathTime, respawnMinutes, killTime});
+                const futures = predictNextSpawns(boss);
                 const card = document.querySelector(`.predict-times[data-boss-id="${boss.id}"]`);
                 if (card) {
                     card.innerHTML = `<strong>📅 未來4次</strong>${renderFutureText(futures)}`;
@@ -745,20 +734,30 @@
 
             const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
             const killTime = boss.killTime || boss.killtime || 0;
-            const nextSpawn = calcNextSpawn(value, respawnMinutes, killTime);
+            const baseMillis = parseTimeToTodayMillis(value);
 
-            const updateData = {
+            bossesRef.doc(id).update({
                 deathTime: value,
                 lastUpdated: Date.now()
-            };
-            if (nextSpawn != null) {
-                updateData.nextSpawn = nextSpawn;
-                updateData.threeMinAlerted = false;
-                updateData.spawnAlerted = false;
+            }).catch(e => console.error('套用死亡時間失敗', e));
+
+            // 同步更新共用狀態（可選）
+            if (boss.name) {
+                const nextSpawn = calcNextSpawnMillis(baseMillis, respawnMinutes, killTime);
+                bossStateRef.doc(boss.name).set({
+                    bossName: boss.name,
+                    lastDeathTime: baseMillis,
+                    nextSpawn: nextSpawn,
+                    respawnMinutes,
+                    killTime,
+                    updatedAt: Date.now()
+                }, { merge: true }).catch(e => console.error('更新共用狀態失敗', e));
             }
 
-            bossesRef.doc(id).update(updateData)
-                .catch(e => console.error('套用死亡時間失敗', e));
+            if (localRuntime.alerts[id]) {
+                localRuntime.alerts[id].threeMinAlerted = false;
+                localRuntime.alerts[id].spawnAlerted = false;
+            }
         }
 
         function updateBoss(id, field, value) {
@@ -768,39 +767,21 @@
                 lastUpdated: Date.now()
             };
 
-            if (field === 'respawnMinutes' || field === 'killTime') {
-                const deathTime = boss.deathTime || '';
-                const respawnMinutes = field === 'respawnMinutes'
-                    ? value
-                    : (boss.respawnMinutes ?? boss.respawn ?? 60);
-                const killTime = field === 'killTime'
-                    ? value
-                    : (boss.killTime || boss.killtime || 0);
-
-                if (deathTime) {
-                    const nextSpawn = calcNextSpawn(deathTime, respawnMinutes, killTime);
-                    if (nextSpawn != null) {
-                        newData.nextSpawn = nextSpawn;
-                        newData.threeMinAlerted = false;
-                        newData.spawnAlerted = false;
-                    }
-                }
-            }
-
             bossesRef.doc(id).update(newData)
                 .catch(e => console.error('更新失敗', e));
         }
 
-        function killBoss(id) {
+        async function killBoss(id) {
+            const boss = bosses[id];
+            if (!boss) return;
+
             const now = new Date();
             const hhmm = now.getHours().toString().padStart(2,'0') + ':' +
                          now.getMinutes().toString().padStart(2,'0');
 
-            const boss = bosses[id];
             const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
             const killTime = boss.killTime || boss.killtime || 0;
-
-            const nextSpawn = calcNextSpawn(hhmm, respawnMinutes, killTime);
+            const baseMillis = Date.now();
 
             const updateData = {
                 deathTime: hhmm,
@@ -808,14 +789,40 @@
                 lastkill_source: 'manual',
                 lastUpdated: Date.now()
             };
-            if (nextSpawn != null) {
-                updateData.nextSpawn = nextSpawn;
-                updateData.threeMinAlerted = false;
-                updateData.spawnAlerted = false;
+
+            try {
+                await bossesRef.doc(id).update(updateData);
+            } catch(e) {
+                console.error('擊殺更新失敗', e);
             }
 
-            bossesRef.doc(id).update(updateData)
-                .catch(e => console.error('擊殺更新失敗', e));
+            // 更新共用 boss_state（全伺服器共享的死亡/重生時間）
+            if (boss.name) {
+                const nextSpawn = calcNextSpawnMillis(baseMillis, respawnMinutes, killTime);
+                try {
+                    await bossStateRef.doc(boss.name).set({
+                        bossName: boss.name,
+                        lastDeathTime: baseMillis,
+                        nextSpawn: nextSpawn,
+                        respawnMinutes,
+                        killTime,
+                        updatedAt: Date.now()
+                    }, { merge: true });
+                    localRuntime.shared[boss.name] = {
+                        lastDeathTime: baseMillis,
+                        nextSpawn,
+                        respawnMinutes,
+                        killTime
+                    };
+                } catch(e) {
+                    console.error('更新共用 boss_state 失敗', e);
+                }
+            }
+
+            if (localRuntime.alerts[id]) {
+                localRuntime.alerts[id].threeMinAlerted = false;
+                localRuntime.alerts[id].spawnAlerted = false;
+            }
         }
 
         function toggleAlert(id) {
@@ -834,7 +841,6 @@
             }
         }
 
-        // 全域倒數：用 predictNextSpawns 算最近一個
         function updateGlobalCountdown() {
             const countdownEl = document.getElementById('countdown');
 
@@ -842,14 +848,8 @@
             let soonestName = '';
 
             Object.values(bosses).forEach(boss => {
-                const deathTime = boss.deathTime || '';
-                if (!deathTime) return;
-
-                const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
-                const killTime = boss.killTime || boss.killtime || 0;
-                const futures = predictNextSpawns({ deathTime, respawnMinutes, killTime });
+                const futures = predictNextSpawns(boss);
                 if (!futures.length) return;
-
                 const first = futures[0];
                 if (first < soonestTime) {
                     soonestTime = first;
@@ -886,20 +886,26 @@
             const THREE_MIN = 3 * 60 * 1000;
 
             Object.values(bosses).forEach(boss => {
-                if (!boss.nextSpawn || !(boss.notify ?? boss.alertEnabled ?? true)) return;
+                if (!(boss.notify ?? boss.alertEnabled ?? true)) return;
 
-                const diff = boss.nextSpawn - now;
+                const futures = predictNextSpawns(boss);
+                if (!futures.length) return;
+                const nextSpawn = futures[0];
+                const diff = nextSpawn - now;
 
-                if (diff <= THREE_MIN && diff > 0 && !boss.threeMinAlerted) {
-                    play3MinAlert();
-                    bossesRef.doc(boss.id).update({ threeMinAlerted: true })
-                        .catch(e => console.error('更新 threeMinAlerted 失敗', e));
+                const alertState = localRuntime.alerts[boss.id] || { threeMinAlerted:false, spawnAlerted:false };
+                if (!localRuntime.alerts[boss.id]) {
+                    localRuntime.alerts[boss.id] = alertState;
                 }
 
-                if (diff <= 0 && !boss.spawnAlerted) {
+                if (diff <= THREE_MIN && diff > 0 && !alertState.threeMinAlerted) {
+                    play3MinAlert();
+                    alertState.threeMinAlerted = true;
+                }
+
+                if (diff <= 0 && !alertState.spawnAlerted) {
                     playSpawnAlert();
-                    bossesRef.doc(boss.id).update({ spawnAlerted: true })
-                        .catch(e => console.error('更新 spawnAlerted 失敗', e));
+                    alertState.spawnAlerted = true;
                 }
             });
         }
@@ -927,7 +933,7 @@
                 ensureAudio();
                 if(!audioCtx) return;
                 if(typeof masterVol !== "number") masterVol = 0.8;
-                if(masterVol <= 0) return;
+                if (masterVol <= 0) return;
 
                 for(let i=0;i<times;i++){
                     const o = audioCtx.createOscillator();
@@ -975,6 +981,24 @@
             }
 
             try {
+                // 1. 讀取共用 boss_state，看有沒有最近死亡/重生時間
+                let shared = null;
+                try {
+                    const stateSnap = await bossStateRef.doc(name).get();
+                    if (stateSnap.exists) {
+                        const sd = stateSnap.data();
+                        shared = {
+                            lastDeathTime: sd.lastDeathTime || null,
+                            nextSpawn: sd.nextSpawn || null,
+                            respawnMinutes: sd.respawnMinutes || respawnMinutes,
+                            killTime: sd.killTime || killTime
+                        };
+                        localRuntime.shared[name] = shared;
+                    }
+                } catch(e) {
+                    console.error('讀取共用狀態失敗（可忽略）', e);
+                }
+
                 const snap = await templatesRef.where('name','==',name).limit(1).get();
                 if (snap.empty) {
                     await templatesRef.add({
@@ -992,9 +1016,6 @@
                     respawnMinutes: respawnMinutes,
                     killTime: killTime,
                     deathTime: '',
-                    nextSpawn: null,
-                    threeMinAlerted: false,
-                    spawnAlerted: false,
                     notify: true,
                     alertEnabled: true,
                     lastUpdated: Date.now()
@@ -1006,6 +1027,8 @@
                 document.getElementById('newRespawnMinutes').value = '60';
                 document.getElementById('newKillTime').value = '0';
                 closeAddModal();
+
+                // 若 shared 有 nextSpawn，新增完卡片後會在下一個 render/predict 中直接對齊那個時間倒數
             } catch (e) {
                 console.error('新增失敗', e);
                 alert('新增失敗：' + e.message);
@@ -1021,4 +1044,3 @@
     </script>
 </body>
 </html>
-
