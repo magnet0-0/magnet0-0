@@ -208,8 +208,15 @@
                 0 0 6px rgba(124,229,255,0.7),
                 inset 0 0 0 1px rgba(0,0,0,0.9);
         }
-        .time-input-row { display: flex; gap: 6px; align-items: center; }
-        .time-input-row input { width: 100%; }
+
+        .time-input-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .time-input-row input {
+            width: 60px;
+        }
 
         .predict-times {
             grid-column: 2 / 3;
@@ -225,11 +232,12 @@
             margin-right: 8px;
             font-weight: 600;
             color: #7ce5ff;
+            display: block;
+            margin-bottom: 4px;
         }
         .predict-item {
-            display: inline-block;
-            margin-right: 10px;
-            margin-top: 0;
+            display: block;
+            margin-top: 2px;
         }
 
         .toggle-container { display: flex; align-items: center; gap: 6px; }
@@ -613,7 +621,7 @@
         function renderFutureText(list) {
             if (!list.length) return '<span class="predict-item">--</span>';
             return list.map((t,i)=>
-                `<span class="predict-item">${i+1}次 ${
+                `<span class="predict-item">第${i+1}次 ${
                     new Date(t).toLocaleTimeString('zh-TW',{
                         timeZone:'Asia/Taipei',
                         hour:'2-digit',
