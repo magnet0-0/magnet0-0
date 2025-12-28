@@ -6,8 +6,6 @@
     <title>王刷新監控系統 Firestore 版（機甲 HUD）</title>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
-    <!-- 機甲感英文字體 -->
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
 
     <style>
@@ -20,10 +18,11 @@
                 repeating-linear-gradient(135deg, rgba(0,255,255,0.03) 0, rgba(0,255,255,0.03) 1px, transparent 1px, transparent 4px);
             color: #e5f7ff;
             min-height: 100vh;
-            padding-top: 108px;
+            padding-top: 132px;
             overflow-x: hidden;
         }
 
+        /* header ───────────────────────── */
         .header {
             position: fixed;
             top: 0; left: 0; right: 0;
@@ -181,9 +180,44 @@
             cursor: pointer;
         }
 
+        /* 最近重生條 ─────────────────── */
+        .recent-spawn-bar {
+            position: fixed;
+            top: 74px;
+            left: 32px;
+            right: 32px;
+            z-index: 900;
+            padding: 6px 12px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(90deg, rgba(0,30,22,0.96), rgba(0,8,14,0.96));
+            border: 1px solid rgba(0,255,210,0.8);
+            box-shadow:
+                0 10px 26px rgba(0,0,0,0.95),
+                0 0 18px rgba(0,255,200,0.5);
+            font-size: 13px;
+        }
+
+        .recent-spawn-label {
+            color: #82ffe4;
+            font-weight: 600;
+        }
+
+        .recent-spawn-text {
+            color: #e5f7ff;
+        }
+
+        .recent-spawn-fade {
+            opacity: 0;
+            transition: opacity 0.6s ease-out;
+        }
+
+        /* 卡片區 ─────────────────────── */
         .boss-cards {
             max-width: 1240px;
-            margin: 88px auto 40px;
+            margin: 132px auto 40px;
             padding: 0 28px 32px;
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -257,16 +291,24 @@
             transform: translateY(-3px);
         }
 
+        /* 剛重生閃爍 ─────────────────── */
+        @keyframes spawnPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(0,255,210,0.9); }
+            50%  { box-shadow: 0 0 24px 6px rgba(0,255,210,0.9); }
+            100% { box-shadow: 0 0 0 0 rgba(0,255,210,0.0); }
+        }
+        .boss-card.just-spawned {
+            border-color: #00ffe0 !important;
+            animation: spawnPulse 1s ease-out infinite;
+        }
+
         .boss-header {
             display: flex;
             align-items: center;
             gap: 10px;
         }
 
-        .boss-title-block {
-            flex: 1;
-            min-width: 0;
-        }
+        .boss-title-block { flex: 1; min-width: 0; }
 
         .boss-name {
             font-family: 'Rajdhani', 'Microsoft JhengHei', sans-serif;
@@ -342,14 +384,9 @@
             box-shadow: 0 0 16px rgba(0,255,210,0.9);
         }
 
-        .toggle.active::after {
-            transform: translateX(24px);
-        }
+        .toggle.active::after { transform: translateX(24px); }
 
-        .controls {
-            display: flex;
-            gap: 6px;
-        }
+        .controls { display: flex; gap: 6px; }
 
         .btn {
             padding: 6px 12px;
@@ -558,6 +595,38 @@
 
         .close:hover { color: #fff; }
 
+        /* 事件 log ───────────────────── */
+        .event-log {
+            position: fixed;
+            right: 12px;
+            bottom: 100px;
+            width: 220px;
+            max-height: 220px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            background: rgba(2,8,16,0.94);
+            border: 1px solid rgba(0,255,210,0.7);
+            box-shadow:
+                0 12px 26px rgba(0,0,0,1),
+                0 0 22px rgba(0,255,210,0.5);
+            font-size: 11px;
+            overflow-y: auto;
+        }
+
+        .event-log-title {
+            font-weight: 600;
+            color: #82ffe4;
+            margin-bottom: 4px;
+        }
+
+        .event-log-item {
+            padding: 1px 0;
+            border-bottom: 1px dashed rgba(0,255,210,0.2);
+            color: #d3e5ff;
+        }
+
+        .event-log-item:last-child { border-bottom: none; }
+
         @media (max-width: 900px) {
             .header {
                 flex-direction: column;
@@ -566,17 +635,21 @@
                 padding: 12px 16px 14px;
             }
             #countdown { font-size: 2em; }
+            .recent-spawn-bar { left: 12px; right: 12px; top: 90px; }
             .boss-cards {
                 grid-template-columns: 1fr;
-                margin-top: 72px;
+                margin-top: 148px;
                 padding: 0 16px 24px;
             }
-            .boss-main {
-                grid-template-columns: 1fr;
-            }
+            .boss-main { grid-template-columns: 1fr; }
             .predict-times {
                 grid-column: 1 / -1;
                 margin-top: 6px;
+            }
+            .event-log {
+                right: 10px;
+                bottom: 90px;
+                width: 200px;
             }
         }
     </style>
@@ -603,8 +676,20 @@
         </div>
     </div>
 
+    <!-- 最近重生條 -->
+    <div id="recentSpawnBar" class="recent-spawn-bar recent-spawn-fade" style="display:none;">
+        <span class="recent-spawn-label">最近重生</span>
+        <span class="recent-spawn-text" id="recentSpawnText">尚無資料</span>
+    </div>
+
     <div class="boss-cards" id="bossCards"></div>
     <button class="add-boss-btn" onclick="openAddModal()" title="新增王">+</button>
+
+    <!-- 事件 log -->
+    <div class="event-log" id="eventLog">
+        <div class="event-log-title">最近事件</div>
+        <div id="eventLogList"></div>
+    </div>
 
     <div id="addModal" class="modal">
         <div class="modal-content">
@@ -628,7 +713,6 @@
         </div>
     </div>
 
-    <!-- 以下 script 與你原本最新版一致（時間邏輯已修正） -->
     <script>
         let masterVol = 0.8;
         let audioCtx = null;
@@ -665,7 +749,12 @@
         let bosses = {};
         let soundEnabled = true;
 
-        const localRuntime = { alerts: {}, shared: {} };
+        const localRuntime = {
+            alerts: {},
+            shared: {},
+            lastSpawnEvent: null,
+            spawnLog: []
+        };
 
         function parseTimeToTodayMillis(timeStr) {
             if (!timeStr) return null;
@@ -706,6 +795,7 @@
                 updateGlobalCountdown();
                 checkBossAlerts();
                 updateFutureBlocks();
+                refreshRecentSpawnBar();
             }, 1000);
         }
 
@@ -728,6 +818,7 @@
         function setupSearch() {
             const searchInput = document.getElementById('search');
             const suggBox = document.getElementById('suggestions');
+
             let allBossNames = [];
 
             bossNamesRef.onSnapshot((snap) => {
@@ -883,6 +974,7 @@
         function createBossCard(id, boss) {
             const div = document.createElement('div');
             div.className = 'boss-card';
+            div.dataset.bossId = id;
 
             const deathTime = boss.deathTime || '';
             const [dh, dm] = deathTime.split(':');
@@ -1031,6 +1123,19 @@
             }).catch(e => console.error('更新失敗', e));
         }
 
+        function pushSpawnLog(text) {
+            const list = localRuntime.spawnLog;
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2,'0');
+            const mm = String(now.getMinutes()).padStart(2,'0');
+            const entry = `${hh}:${mm}  ${text}`;
+            list.unshift(entry);
+            if (list.length > 10) list.pop();
+            const logEl = document.getElementById('eventLogList');
+            if (!logEl) return;
+            logEl.innerHTML = list.map(x => `<div class="event-log-item">${x}</div>`).join('');
+        }
+
         async function killBoss(id) {
             const boss = bosses[id];
             if (!boss) return;
@@ -1083,6 +1188,8 @@
                 localRuntime.alerts[id].threeMinAlerted = false;
                 localRuntime.alerts[id].spawnAlerted = false;
             }
+
+            pushSpawnLog(`你擊殺 ${boss.name || '未知王'}`);
         }
 
         function toggleAlert(id) {
@@ -1141,6 +1248,49 @@
             playBeep(6);
         }
 
+        function markCardJustSpawned(bossId) {
+            const card = document.querySelector(`.boss-card[data-boss-id="${bossId}"]`);
+            if (!card) return;
+            card.classList.add('just-spawned');
+            setTimeout(() => {
+                card.classList.remove('just-spawned');
+            }, 10000);
+        }
+
+        function setRecentSpawn(name, timeMillis) {
+            localRuntime.lastSpawnEvent = { name, time: timeMillis };
+            refreshRecentSpawnBar();
+        }
+
+        function refreshRecentSpawnBar() {
+            const bar = document.getElementById('recentSpawnBar');
+            const textEl = document.getElementById('recentSpawnText');
+            if (!bar || !textEl) return;
+
+            const ev = localRuntime.lastSpawnEvent;
+            if (!ev) {
+                bar.style.display = 'none';
+                return;
+            }
+            const now = Date.now();
+            const diff = now - ev.time;
+            if (diff > 60 * 1000) {
+                bar.classList.add('recent-spawn-fade');
+                setTimeout(() => {
+                    if (localRuntime.lastSpawnEvent &&
+                        now - localRuntime.lastSpawnEvent.time > 60 * 1000) {
+                        localRuntime.lastSpawnEvent = null;
+                        bar.style.display = 'none';
+                    }
+                }, 600);
+                return;
+            }
+            const sec = Math.floor(diff / 1000);
+            textEl.textContent = `${ev.name}（${sec} 秒前）`;
+            bar.style.display = 'flex';
+            bar.classList.remove('recent-spawn-fade');
+        }
+
         function checkBossAlerts() {
             const now = Date.now();
             const THREE_MIN = 3 * 60 * 1000;
@@ -1163,9 +1313,22 @@
                     alertState.threeMinAlerted = true;
                 }
 
-                if (diff <= 0 && !alertState.spawnAlerted) {
+                // 放寬重生判斷，確保一定有聲
+                if (diff <= 0 && diff > -5000 && !alertState.spawnAlerted) {
                     playSpawnAlert();
                     alertState.spawnAlerted = true;
+                    const name = boss.name || '';
+                    setRecentSpawn(name, now);
+                    pushSpawnLog(`${name} 重生`);
+                    markCardJustSpawned(boss.id);
+                } else if (diff <= -5000 && !alertState.spawnAlerted) {
+                    // 如果 lag 超過 5 秒仍未播，補一次
+                    playSpawnAlert();
+                    alertState.spawnAlerted = true;
+                    const name = boss.name || '';
+                    setRecentSpawn(name, now);
+                    pushSpawnLog(`${name} 重生（延遲）`);
+                    markCardJustSpawned(boss.id);
                 }
             });
         }
