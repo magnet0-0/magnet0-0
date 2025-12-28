@@ -396,14 +396,14 @@
         const bossesRef = db.collection('bosses');
         const bossNamesRef = db.collection('boss_events');
         const templatesRef = db.collection('boss_templates');
-        const bossStateRef = db.collection('boss_state'); // 共用王狀態 [web:38]
+        const bossStateRef = db.collection('boss_state');
 
         let bosses = {};
         let soundEnabled = true;
 
         const localRuntime = {
-            alerts: {},  // bossId -> {threeMinAlerted, spawnAlerted}
-            shared: {}   // bossName -> {lastDeathTime, nextSpawn, respawnMinutes, killTime}
+            alerts: {},
+            shared: {}
         };
 
         function parseTimeToTodayMillis(timeStr) {
@@ -494,7 +494,6 @@
                     suggBox.innerHTML = '';
                     return;
                 }
-
                 const lower = keyword.toLowerCase();
                 const results = allBossNames.filter(n =>
                     n.toLowerCase().includes(lower)
@@ -731,7 +730,6 @@
             const hourInput = document.getElementById(`deathHour-${id}`);
             const minInput  = document.getElementById(`deathMin-${id}`);
             if (!hourInput || !minInput) return;
-
             const h = String(parseInt(hourInput.value || '0', 10)).padStart(2,'0');
             const m = String(parseInt(minInput.value  || '0', 10)).padStart(2,'0');
             const value = `${h}:${m}`;
