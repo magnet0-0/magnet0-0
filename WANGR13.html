@@ -52,13 +52,25 @@
         .header::before { left: 40px; }
         .header::after { right: 40px; }
 
+        /* 倒數區改成上下兩行 */
         #countdown {
-            font-family: 'Rajdhani', 'Microsoft JhengHei', sans-serif;
-            font-size: 2.4em;
-            font-weight: 700;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            color: #f9fffc;
+            font-family: 'Rajdhani','Microsoft JhengHei',sans-serif;
+            display:flex;
+            flex-direction:column;
+            gap:4px;
+        }
+        #lastSpawnLine {
+            font-size: 1.1em;
+            letter-spacing: 0.12em;
+            color:#9fffe0;
+            text-shadow:0 0 10px rgba(0,255,210,0.8);
+        }
+        #nextSpawnLine {
+            font-size: 2.2em;
+            font-weight:700;
+            letter-spacing:0.18em;
+            text-transform:uppercase;
+            color:#f9fffc;
             text-shadow:
                 0 0 12px rgba(0,0,0,1),
                 0 0 18px rgba(0,255,200,0.85);
@@ -286,220 +298,188 @@
             animation: spawnPulse 1s ease-out infinite;
         }
 
-        .boss-header { display: flex; align-items: center; gap: 10px; }
-        .boss-title-block { flex: 1; min-width: 0; }
+        .boss-header { display:flex;align-items:center;gap:10px; }
+        .boss-title-block { flex:1;min-width:0; }
 
         .boss-name {
-            font-family: 'Rajdhani', 'Microsoft JhengHei', sans-serif;
-            font-size: 1.7em;
-            font-weight: 700;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            color: #f4fff8;
-            text-shadow:
-                0 0 12px rgba(0,0,0,1),
-                0 0 18px rgba(0,255,210,0.85);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            font-family:'Rajdhani','Microsoft JhengHei',sans-serif;
+            font-size:1.7em;
+            font-weight:700;
+            letter-spacing:0.15em;
+            text-transform:uppercase;
+            color:#f4fff8;
+            text-shadow:0 0 12px rgba(0,0,0,1),0 0 18px rgba(0,255,210,0.85);
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
         }
 
         .boss-sub {
-            margin-top: 4px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #89ffe0;
-            letter-spacing: 0.5px;
-            text-shadow: 0 0 10px rgba(0,255,210,0.85);
+            margin-top:4px;
+            font-size:16px;
+            font-weight:600;
+            color:#89ffe0;
+            letter-spacing:0.5px;
+            text-shadow:0 0 10px rgba(0,255,210,0.85);
         }
 
-        .boss-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .toggle-container {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .toggle-label {
-            font-size: 11px;
-            color: #d0e4ff;
-        }
+        .boss-actions { display:flex;align-items:center;gap:10px; }
+        .toggle-container { display:flex;align-items:center;gap:5px; }
+        .toggle-label { font-size:11px;color:#d0e4ff; }
 
         .toggle {
-            width: 46px;
-            height: 20px;
-            border-radius: 999px;
-            border: 1px solid rgba(0,255,210,0.7);
-            background: linear-gradient(135deg, #050913, #020305);
-            position: relative;
-            cursor: pointer;
-            box-shadow: 0 0 10px rgba(0,0,0,0.9);
-            transition: background 0.15s, box-shadow 0.15s, border-color 0.15s;
+            width:46px;
+            height:20px;
+            border-radius:999px;
+            border:1px solid rgba(0,255,210,0.7);
+            background:linear-gradient(135deg,#050913,#020305);
+            position:relative;
+            cursor:pointer;
+            box-shadow:0 0 10px rgba(0,0,0,0.9);
+            transition:background 0.15s,box-shadow 0.15s,border-color 0.15s;
         }
 
         .toggle::after {
-            content: '';
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 16px;
-            height: 16px;
-            border-radius: 4px;
-            background: linear-gradient(135deg, #00ffe0, #0ff);
-            box-shadow:
-                0 0 10px rgba(0,255,220,0.9),
-                0 0 0 1px rgba(0,0,0,1);
-            transition: transform 0.16s;
+            content:'';
+            position:absolute;
+            top:2px;left:2px;
+            width:16px;height:16px;
+            border-radius:4px;
+            background:linear-gradient(135deg,#00ffe0,#0ff);
+            box-shadow:0 0 10px rgba(0,255,220,0.9),0 0 0 1px rgba(0,0,0,1);
+            transition:transform 0.16s;
         }
 
         .toggle.active {
-            background: linear-gradient(135deg, #063222, #031018);
-            border-color: #00ffe0;
-            box-shadow: 0 0 16px rgba(0,255,210,0.9);
+            background:linear-gradient(135deg,#063222,#031018);
+            border-color:#00ffe0;
+            box-shadow:0 0 16px rgba(0,255,210,0.9);
         }
 
-        .toggle.active::after { transform: translateX(24px); }
+        .toggle.active::after { transform:translateX(24px); }
 
-        .controls { display: flex; gap: 6px; }
+        .controls { display:flex;gap:6px; }
 
         .btn {
-            padding: 6px 12px;
-            border-radius: 6px;
-            border: 1px solid transparent;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 12px;
-            letter-spacing: 0.4px;
-            background-size: 180% 180%;
-            transition: transform 0.08s, box-shadow 0.08s, filter 0.1s, background-position 0.2s;
+            padding:6px 12px;
+            border-radius:6px;
+            border:1px solid transparent;
+            cursor:pointer;
+            font-weight:600;
+            font-size:12px;
+            letter-spacing:0.4px;
+            background-size:180% 180%;
+            transition:transform 0.08s,box-shadow 0.08s,filter 0.1s,background-position 0.2s;
         }
 
         .btn-primary {
-            background-image: linear-gradient(135deg, #0aa0ff, #00ffe0);
-            border-color: rgba(0,200,255,0.9);
-            color: #041018;
-            box-shadow:
-                0 0 14px rgba(0,200,255,0.9),
-                0 0 0 1px rgba(0,0,0,1);
+            background-image:linear-gradient(135deg,#0aa0ff,#00ffe0);
+            border-color:rgba(0,200,255,0.9);
+            color:#041018;
+            box-shadow:0 0 14px rgba(0,200,255,0.9),0 0 0 1px rgba(0,0,0,1);
         }
 
         .btn-danger {
-            background-image: linear-gradient(135deg, #ff5b6a, #ffb34a);
-            border-color: rgba(255,120,100,0.9);
-            color: #140203;
-            box-shadow:
-                0 0 14px rgba(255,120,100,0.9),
-                0 0 0 1px rgba(0,0,0,1);
+            background-image:linear-gradient(135deg,#ff5b6a,#ffb34a);
+            border-color:rgba(255,120,100,0.9);
+            color:#140203;
+            box-shadow:0 0 14px rgba(255,120,100,0.9),0 0 0 1px rgba(0,0,0,1);
         }
 
         .btn-primary:hover,
         .btn-danger:hover {
-            transform: translateY(-1px);
-            filter: brightness(1.05);
-            background-position: 100% 0;
+            transform:translateY(-1px);
+            filter:brightness(1.05);
+            background-position:100% 0;
         }
 
         .btn:active {
-            transform: translateY(1px) scale(0.97);
-            box-shadow: 0 0 6px rgba(0,0,0,1);
+            transform:translateY(1px) scale(0.97);
+            box-shadow:0 0 6px rgba(0,0,0,1);
         }
 
         .boss-main {
-            display: grid;
-            grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.5fr);
-            gap: 8px;
-            margin-top: 4px;
+            display:grid;
+            grid-template-columns:minmax(0,2.1fr) minmax(0,1.5fr);
+            gap:8px;
+            margin-top:4px;
         }
 
-        .input-group { margin: 0; }
+        .input-group { margin:0; }
 
         .input-group label {
-            display: block;
-            margin-bottom: 3px;
-            color: #9fb8ff;
-            font-size: 11px;
-            letter-spacing: 0.6px;
+            display:block;
+            margin-bottom:3px;
+            color:#9fb8ff;
+            font-size:11px;
+            letter-spacing:0.6px;
         }
 
         .input-group input {
-            width: 100%;
-            height: 32px;
-            padding: 5px 8px;
-            border-radius: 6px;
-            border: 1px solid rgba(0,255,210,0.45);
-            background: linear-gradient(135deg, #050b16, #020508);
-            color: #e5f7ff;
-            font-size: 13px;
-            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.8);
-            transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+            width:100%;
+            height:32px;
+            padding:5px 8px;
+            border-radius:6px;
+            border:1px solid rgba(0,255,210,0.45);
+            background:linear-gradient(135deg,#050b16,#020508);
+            color:#e5f7ff;
+            font-size:13px;
+            box-shadow:inset 0 0 0 1px rgba(0,0,0,0.8);
+            transition:border-color 0.18s,box-shadow 0.18s,background 0.18s;
         }
 
         .input-group input:focus {
-            outline: none;
-            border-color: #00ffe0;
-            background: linear-gradient(135deg, #071626, #020306);
-            box-shadow:
-                0 0 10px rgba(0,255,210,0.9),
-                inset 0 0 0 1px rgba(0,0,0,1);
+            outline:none;
+            border-color:#00ffe0;
+            background:linear-gradient(135deg,#071626,#020306);
+            box-shadow:0 0 10px rgba(0,255,210,0.9),inset 0 0 0 1px rgba(0,0,0,1);
         }
 
         .time-input-row {
-            display: flex;
-            gap: 6px;
-            align-items: center;
+            display:flex;
+            gap:6px;
+            align-items:center;
         }
 
-        .time-input-row input { width: 58px; }
+        .time-input-row input { width:58px; }
 
         .predict-times {
-            position: relative;
-            grid-column: 2 / 3;
-            margin-top: 0;
-            padding: 8px 10px 10px 14px;
-            border-radius: 10px;
-            background: linear-gradient(135deg, rgba(3,16,32,0.96), rgba(2,8,20,0.98));
-            border: 1px solid rgba(0,200,255,0.65);
-            font-size: 12px;
-            color: #d7eaff;
-            box-shadow:
-                0 0 0 1px rgba(0,0,0,1) inset,
-                0 0 16px rgba(0,0,0,0.9);
+            position:relative;
+            grid-column:2 / 3;
+            margin-top:0;
+            padding:8px 10px 10px 14px;
+            border-radius:10px;
+            background:linear-gradient(135deg,rgba(3,16,32,0.96),rgba(2,8,20,0.98));
+            border:1px solid rgba(0,200,255,0.65);
+            font-size:12px;
+            color:#d7eaff;
+            box-shadow:0 0 0 1px rgba(0,0,0,1) inset,0 0 16px rgba(0,0,0,0.9);
         }
 
         .predict-times::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 3px;
-            background: linear-gradient(180deg, #00ffe0, #00a0ff);
-            box-shadow:
-                0 0 12px rgba(0,255,220,0.9),
-                0 0 20px rgba(0,160,255,0.7);
+            content:'';
+            position:absolute;
+            left:0;top:0;bottom:0;
+            width:3px;
+            background:linear-gradient(180deg,#00ffe0,#00a0ff);
+            box-shadow:0 0 12px rgba(0,255,220,0.9),0 0 20px rgba(0,160,255,0.7);
         }
 
         .predict-times strong {
-            display: block;
-            margin-bottom: 4px;
-            font-weight: 600;
-            color: #82ffe4;
-            text-shadow: 0 0 10px rgba(0,255,210,0.9);
+            display:block;
+            margin-bottom:4px;
+            font-weight:600;
+            color:#82ffe4;
+            text-shadow:0 0 10px rgba(0,255,210,0.9);
         }
 
         .predict-item {
-            display: block;
-            margin-top: 2px;
-            font-family: 'Rajdhani', 'Microsoft JhengHei', sans-serif;
-            letter-spacing: 0.06em;
+            display:block;
+            margin-top:2px;
+            font-family:'Rajdhani','Microsoft JhengHei',sans-serif;
+            letter-spacing:0.06em;
         }
 
-        /* + 按鈕：隱藏 */
         .add-boss-btn{
             position:fixed;
             bottom:28px;
@@ -519,10 +499,6 @@
             justify-content:center;
         }
 
-        .add-boss-btn:hover { transform: translateY(-3px) scale(1.05); }
-        .add-boss-btn:active { transform: translateY(1px) scale(0.96); }
-
-        /* 最近事件：右下 */
         .event-log {
             position: fixed;
             right: 12px;
@@ -540,62 +516,50 @@
             overflow-y: auto;
         }
 
-        .event-log-title {
-            font-weight: 600;
-            color: #82ffe4;
-            margin-bottom: 4px;
-        }
-
-        .event-log-item {
-            padding: 1px 0;
-            border-bottom: 1px dashed rgba(0,255,210,0.2);
-            color: #d3e5ff;
-        }
-
-        .event-log-item:last-child { border-bottom: none; }
+        .event-log-title { font-weight:600;color:#82ffe4;margin-bottom:4px; }
+        .event-log-item { padding:1px 0;border-bottom:1px dashed rgba(0,255,210,0.2);color:#d3e5ff; }
+        .event-log-item:last-child { border-bottom:none; }
 
         .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0; top: 0;
-            width: 100%; height: 100%;
-            background: radial-gradient(circle at center, rgba(3,8,18,0.95), rgba(0,0,0,0.98));
+            display:none;
+            position:fixed;
+            z-index:1000;
+            left:0;top:0;
+            width:100%;height:100%;
+            background:radial-gradient(circle at center,rgba(3,8,18,0.95),rgba(0,0,0,0.98));
         }
 
         .modal-content {
-            margin: 7% auto;
-            padding: 26px 24px 24px;
-            width: 90%;
-            max-width: 520px;
-            border-radius: 16px;
-            background: linear-gradient(135deg, #050b16, #020509);
-            border: 1px solid rgba(0,255,210,0.8);
-            box-shadow:
-                0 20px 48px rgba(0,0,0,1),
-                0 0 26px rgba(0,255,220,0.7);
-            position: relative;
-            animation: slideIn 0.28s;
-            clip-path: polygon(0 14px,14px 0,100% 0,100% 100%,0 100%);
+            margin:7% auto;
+            padding:26px 24px 24px;
+            width:90%;
+            max-width:520px;
+            border-radius:16px;
+            background:linear-gradient(135deg,#050b16,#020509);
+            border:1px solid rgba(0,255,210,0.8);
+            box-shadow:0 20px 48px rgba(0,0,0,1),0 0 26px rgba(0,255,220,0.7);
+            position:relative;
+            animation:slideIn 0.28s;
+            clip-path:polygon(0 14px,14px 0,100% 0,100% 100%,0 100%);
         }
 
         @keyframes slideIn {
-            from { transform: translateY(-40px); opacity: 0; }
-            to   { transform: translateY(0);      opacity: 1; }
+            from { transform:translateY(-40px);opacity:0; }
+            to   { transform:translateY(0);opacity:1; }
         }
 
         .close {
-            position: absolute;
-            right: 14px;
-            top: 8px;
-            font-size: 26px;
-            font-weight: bold;
-            color: #8ddfff;
-            cursor: pointer;
-            text-shadow: 0 0 10px rgba(0,255,255,0.9);
+            position:absolute;
+            right:14px;
+            top:8px;
+            font-size:26px;
+            font-weight:bold;
+            color:#8ddfff;
+            cursor:pointer;
+            text-shadow:0 0 10px rgba(0,255,255,0.9);
         }
 
-        .close:hover { color: #fff; }
+        .close:hover { color:#fff; }
 
         @media (max-width: 900px) {
             .header {
@@ -604,16 +568,14 @@
                 gap: 8px;
                 padding: 12px 16px 14px;
             }
-            #countdown { font-size: 2em; }
+            #nextSpawnLine { font-size: 2em; }
             .recent-spawn-bar { left: 12px; right: 12px; top: 90px; }
             .boss-cards {
                 grid-template-columns: 1fr;
                 margin-top: 148px;
                 padding: 0 16px 72px;
             }
-            .boss-main {
-                grid-template-columns: 1fr;
-            }
+            .boss-main { grid-template-columns: 1fr; }
             .predict-times {
                 grid-column: 1 / -1;
                 margin-top: 6px;
@@ -628,7 +590,10 @@
 </head>
 <body>
     <div class="header">
-        <div id="countdown">所有王已重生</div>
+        <div id="countdown">
+            <div id="lastSpawnLine">尚無重生紀錄</div>
+            <div id="nextSpawnLine">所有王已重生</div>
+        </div>
         <div class="search-container">
             <span class="search-icon">🔍</span>
             <input type="text" id="search" placeholder="搜索王名稱...">
@@ -1184,31 +1149,46 @@
         }
 
         function updateGlobalCountdown() {
-            const el = document.getElementById('countdown');
+            const lastLine = document.getElementById('lastSpawnLine');
+            const nextLine = document.getElementById('nextSpawnLine');
+
+            // 上排：最後一個重生事件（用 lastSpawnEvent）
+            if (localRuntime.lastSpawnEvent) {
+                const t = new Date(localRuntime.lastSpawnEvent.time);
+                const hh = String(t.getHours()).padStart(2,'0');
+                const mm = String(t.getMinutes()).padStart(2,'0');
+                lastLine.textContent = `${localRuntime.lastSpawnEvent.name} 已重生（${hh}:${mm}）`;
+            } else {
+                lastLine.textContent = '尚無重生紀錄';
+            }
+
+            // 下排：下一隻要重生的王＋倒數
             const now = Date.now();
-            let minDiff = Infinity;
+            let best = null;
 
             Object.values(bosses).forEach(boss => {
                 const futures = predictNextSpawns(boss);
                 if (!futures.length) return;
                 const diff = futures[0] - now;
-                if (diff < minDiff) minDiff = diff;
+                if (best == null || diff < best.diff) {
+                    best = { boss, nextTime: futures[0], diff };
+                }
             });
 
-            if (!isFinite(minDiff) || Object.keys(bosses).length === 0) {
-                el.textContent = '所有王已重生';
+            if (!best) {
+                nextLine.textContent = '所有王已重生';
                 return;
             }
 
-            if (minDiff <= 0) {
-                el.textContent = '有王已重生';
+            if (best.diff <= 0) {
+                nextLine.textContent = `${best.boss.name || '未知王'} 已重生`;
                 return;
             }
 
-            const totalSec = Math.floor(minDiff / 1000);
+            const totalSec = Math.floor(best.diff / 1000);
             const m = String(Math.floor(totalSec / 60)).padStart(2,'0');
             const s = String(totalSec % 60).padStart(2,'0');
-            el.textContent = `下一王倒數 ${m}:${s}`;
+            nextLine.textContent = `${best.boss.name || '未知王'} 倒數 ${m}:${s}`;
         }
 
         function play3MinAlert() {
@@ -1225,7 +1205,6 @@
             const card = document.querySelector(`.boss-card[data-boss-id="${bossId}"]`);
             if (!card) return;
             card.classList.add('just-spawned');
-            // 這裡設定 60 秒淡出
             setTimeout(() => {
                 card.classList.remove('just-spawned');
             }, 60000);
@@ -1291,14 +1270,16 @@
                     playSpawnAlert();
                     alertState.spawnAlerted = true;
                     const name = boss.name || '';
-                    setRecentSpawn(name, now);
+                    const nowTime = Date.now();
+                    setRecentSpawn(name, nowTime);
                     pushSpawnLog(`${name} 重生`);
                     markCardJustSpawned(boss.id);
                 } else if (diff <= -5000 && !alertState.spawnAlerted) {
                     playSpawnAlert();
                     alertState.spawnAlerted = true;
                     const name = boss.name || '';
-                    setRecentSpawn(name, now);
+                    const nowTime = Date.now();
+                    setRecentSpawn(name, nowTime);
                     pushSpawnLog(`${name} 重生（延遲）`);
                     markCardJustSpawned(boss.id);
                 }
