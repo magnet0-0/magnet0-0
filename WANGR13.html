@@ -612,7 +612,7 @@
         </div>
     </div>
 
-    <div id="recentSpawnBar" class="recent-spawn-bar recent-spawn-fade" style="display:none;">
+    <div class="recent-spawn-bar" id="recentSpawnBar" style="display:none;">
         <span class="recent-spawn-label">最近重生</span>
         <span class="recent-spawn-text" id="recentSpawnText">尚無資料</span>
     </div>
@@ -686,7 +686,6 @@
         const localRuntime = {
             alerts: {},
             shared: {},
-            lastSpawnEvent: null,
             spawnLog: [],
             initialScanDone: false
         };
@@ -729,7 +728,6 @@
                 updateGlobalCountdown();
                 checkBossAlerts();
                 updateFutureBlocks();
-                refreshRecentSpawnBar();
             }, 1000);
         }
 
@@ -785,12 +783,11 @@
                         });
 
                         if (latest) {
-                            localRuntime.lastSpawnEvent = latest;
                             const t = new Date(latest.time);
                             const hh = String(t.getHours()).padStart(2,'0');
                             const mm = String(t.getMinutes()).padStart(2,'0');
                             const ss = String(t.getSeconds()).padStart(2,'0');
-                            pushSpawnLog(`${latest.name} 已於 ${hh}:${mm}:${ss} 重生`);
+                            setLastSpawnMessage(`${latest.name} 已於 ${hh}:${mm}:${ss} 重生`);
                         }
                     }
                 }, (err) => {
@@ -1127,7 +1124,7 @@
                 localRuntime.alerts[id].lastSeenNextSpawn = null;
             }
 
-            pushSpawnLog(`${boss.name || '未知王'} 死亡時間改為 ${value}`);
+            pushSpawnLog(`[調整] ${boss.name || '未知王'} 死亡時間改為 ${value}`);
         }
 
         function updateBoss(id, field, value) {
@@ -1139,7 +1136,7 @@
 
             if (boss && (field === 'respawnMinutes' || field === 'killTime')) {
                 const label = field === 'respawnMinutes' ? '重生間隔' : '擊殺用時';
-                pushSpawnLog(`${boss.name || '未知王'} ${label} 改為 ${value} 分鐘`);
+                pushSpawnLog(`[調整] ${boss.name || '未知王'} ${label} 改為 ${value} 分鐘`);
             }
         }
 
@@ -1237,36 +1234,34 @@
             } catch(e) {}
         }
 
-        function pushSpawnLog(text) {
-            const now = new Date();
-            const hh = String(now.getHours()).padStart(2,'0');
-            const mm = String(now.getMinutes()).padStart(2,'0');
-            const ss = String(now.getSeconds()).padStart(2,'0');
-            const line = `[${hh}:${mm}:${ss}] ${text}`;
+        function pushSpawnLog(line) {
             localRuntime.spawnLog.unshift(line);
             localRuntime.spawnLog = localRuntime.spawnLog.slice(0, 50);
-
             const listEl = document.getElementById('eventLogList');
-            if (!listEl) return;
-            listEl.innerHTML = localRuntime.spawnLog.map(item =>
-                `<div class="event-log-item">${item}</div>`
-            ).join('');
+            if (listEl) {
+                listEl.innerHTML = localRuntime.spawnLog.map(item =>
+                    `<div class="event-log-item">${item}</div>`
+                ).join('');
+            }
+        }
+
+        function setLastSpawnMessage(msg) {
+            const lastLine = document.getElementById('lastSpawnLine');
+            if (lastLine) {
+                lastLine.textContent = msg;
+            }
+            const bar = document.getElementById('recentSpawnBar');
+            const barText = document.getElementById('recentSpawnText');
+            if (bar && barText) {
+                barText.textContent = msg;
+                bar.style.display = 'flex';
+            }
+            pushSpawnLog(msg);
         }
 
         function updateGlobalCountdown() {
-            const lastLine = document.getElementById('lastSpawnLine');
             const nextLine = document.getElementById('nextSpawnLine');
-            if (!lastLine || !nextLine) return;
-
-            if (localRuntime.lastSpawnEvent) {
-                const t = new Date(localRuntime.lastSpawnEvent.time);
-                const hh = String(t.getHours()).padStart(2,'0');
-                const mm = String(t.getMinutes()).padStart(2,'0');
-                const ss = String(t.getSeconds()).padStart(2,'0');
-                lastLine.textContent = `${localRuntime.lastSpawnEvent.name} 已於 ${hh}:${mm}:${ss} 重生`;
-            } else {
-                lastLine.textContent = '尚無重生紀錄';
-            }
+            if (!nextLine) return;
 
             const now = Date.now();
             let best = null;
@@ -1287,18 +1282,11 @@
             }
 
             if (best.diff <= 0) {
-                const t = best.nextTime;
-                const dt = new Date(t);
+                const dt = new Date(best.nextTime);
                 const hh = String(dt.getHours()).padStart(2,'0');
                 const mm = String(dt.getMinutes()).padStart(2,'0');
                 const ss = String(dt.getSeconds()).padStart(2,'0');
                 const msg = `${best.boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 重生`;
-
-                localRuntime.lastSpawnEvent = {
-                    name: best.boss.name || '未知王',
-                    time: t
-                };
-                pushSpawnLog(msg);
                 nextLine.textContent = msg;
                 return;
             }
@@ -1340,7 +1328,6 @@
                 if (diff <= THREE_MIN && diff > 0 && !alertState.threeMinAlerted) {
                     if (soundEnabled) playBeep(3);
                     alertState.threeMinAlerted = true;
-                    pushSpawnLog(`${boss.name || '未知王'} 即將在 3 分鐘內重生`);
                 }
 
                 if (diff <= 0 && !alertState.spawnAlerted) {
@@ -1351,38 +1338,9 @@
                     const mm = String(t.getMinutes()).padStart(2,'0');
                     const ss = String(t.getSeconds()).padStart(2,'0');
                     const msg = `${boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 重生`;
-                    localRuntime.lastSpawnEvent = { name: boss.name || '未知王', time: nextSpawn };
-                    pushSpawnLog(msg);
-                    flashRecentSpawnBar(msg);
+                    setLastSpawnMessage(msg);
                 }
             });
-        }
-
-        function refreshRecentSpawnBar() {
-            const bar = document.getElementById('recentSpawnBar');
-            const textEl = document.getElementById('recentSpawnText');
-            if (!bar || !textEl) return;
-            if (!localRuntime.lastSpawnEvent) {
-                bar.style.display = 'none';
-                return;
-            }
-            const t = new Date(localRuntime.lastSpawnEvent.time);
-            const hh = String(t.getHours()).padStart(2,'0');
-            const mm = String(t.getMinutes()).padStart(2,'0');
-            const ss = String(t.getSeconds()).padStart(2,'0');
-            textEl.textContent = `${localRuntime.lastSpawnEvent.name} 已於 ${hh}:${mm}:${ss} 重生`;
-            bar.style.display = 'flex';
-        }
-
-        function flashRecentSpawnBar(msg) {
-            const bar = document.getElementById('recentSpawnBar');
-            const textEl = document.getElementById('recentSpawnText');
-            if (!bar || !textEl) return;
-            textEl.textContent = msg;
-            bar.style.display = 'flex';
-            bar.classList.remove('recent-spawn-fade');
-            void bar.offsetWidth;
-            setTimeout(()=>bar.classList.add('recent-spawn-fade'), 4000);
         }
 
         function openAddModal() {
