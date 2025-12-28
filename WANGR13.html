@@ -52,9 +52,8 @@
         .header::before { left: 40px; }
         .header::after { right: 40px; }
 
-        /* 上下兩行倒數 */
         #countdown {
-            font-family: 'Rajdhani','Microsoft JhengHei',sans-serif;
+            font-family:'Rajdhani','Microsoft JhengHei',sans-serif;
             display:flex;
             flex-direction:column;
             gap:4px;
@@ -688,7 +687,8 @@
             alerts: {},
             shared: {},
             lastSpawnEvent: null,
-            spawnLog: []
+            spawnLog: [],
+            initialScanDone: false    // 初次補紀錄旗標
         };
 
         function parseTimeToTodayMillis(timeStr) {
@@ -742,6 +742,53 @@
                     bosses = data;
                     renderBossCards();
                     updateSearchStatus();
+
+                    // ---------- 初次補紀錄：掃出最近一輪已重生 ----------
+                    if (!localRuntime.initialScanDone) {
+                        localRuntime.initialScanDone = true;
+                        const now = Date.now();
+                        let latestSpawn = null; // { name, time }
+
+                        Object.values(bosses).forEach(boss => {
+                            const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
+                            const killTime = boss.killTime || boss.killtime || 0;
+                            const shared = localRuntime.shared[boss.name] || null;
+                            let baseMillis = null;
+
+                            if (shared && shared.lastDeathTime) {
+                                baseMillis = shared.lastDeathTime;
+                            } else if (boss.deathTime) {
+                                baseMillis = parseTimeToTodayMillis(boss.deathTime);
+                            }
+                            if (!baseMillis) return;
+
+                            const step = (respawnMinutes + killTime) * 60000;
+                            if (step <= 0) return;
+
+                            let k = Math.floor((now - baseMillis) / step);
+                            if (k < 0) return;
+
+                            const lastSpawnTime = baseMillis + k * step;
+                            if (lastSpawnTime <= now) {
+                                if (!latestSpawn || lastSpawnTime > latestSpawn.time) {
+                                    latestSpawn = {
+                                        name: boss.name || '未知王',
+                                        time: lastSpawnTime
+                                    };
+                                }
+                            }
+                        });
+
+                        if (latestSpawn) {
+                            localRuntime.lastSpawnEvent = latestSpawn;
+                            const t = new Date(latestSpawn.time);
+                            const hh = String(t.getHours()).padStart(2,'0');
+                            const mm = String(t.getMinutes()).padStart(2,'0');
+                            const ss = String(t.getSeconds()).padStart(2,'0');
+                            pushSpawnLog(`${latestSpawn.name} 已於 ${hh}:${mm}:${ss} 重生`);
+                        }
+                    }
+                    // ---------- 初次補紀錄結束 ----------
                 }, (err) => {
                     console.error('載入 bosses 發生錯誤：', err);
                     document.getElementById('searchStatus').textContent = '讀取錯誤';
@@ -1288,19 +1335,17 @@
                     alertState.threeMinAlerted = true;
                 }
 
-                if (diff <= 0 && diff > -5000 && !alertState.spawnAlerted) {
+                // 自動重生：都會寫最近事件與第一行
+                if (diff <= 0 && !alertState.spawnAlerted) {
                     playSpawnAlert();
                     alertState.spawnAlerted = true;
                     const name = boss.name || '';
                     setRecentSpawn(name, now);
-                    pushSpawnLog(`${name} 重生`);
-                    markCardJustSpawned(boss.id);
-                } else if (diff <= -5000 && !alertState.spawnAlerted) {
-                    playSpawnAlert();
-                    alertState.spawnAlerted = true;
-                    const name = boss.name || '';
-                    setRecentSpawn(name, now);
-                    pushSpawnLog(`${name} 重生（延遲）`);
+                    if (diff > -5000) {
+                        pushSpawnLog(`${name} 重生`);
+                    } else {
+                        pushSpawnLog(`${name} 重生（延遲）`);
+                    }
                     markCardJustSpawned(boss.id);
                 }
             });
