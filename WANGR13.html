@@ -744,7 +744,6 @@
                     renderBossCards();
                     updateSearchStatus();
 
-                    // 首次載入時：掃今天所有王，找出「最後一次已發生的重生」
                     if (!localRuntime.initialScanDone) {
                         localRuntime.initialScanDone = true;
                         const now = Date.now();
@@ -752,7 +751,7 @@
                         todayStart.setHours(0,0,0,0);
                         const todayStartMs = todayStart.getTime();
 
-                        let latest = null; // { name, time }
+                        let latest = null;
 
                         Object.values(bosses).forEach(boss => {
                             const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
@@ -1082,6 +1081,7 @@
             const hourInput = document.getElementById(`deathHour-${id}`);
             const minInput  = document.getElementById(`deathMin-${id}`);
             if (!hourInput || !minInput) return;
+
             const h = String(parseInt(hourInput.value || '0', 10)).padStart(2,'0');
             const m = String(parseInt(minInput.value  || '0', 10)).padStart(2,'0');
             const value = `${h}:${m}`;
@@ -1126,26 +1126,31 @@
                 localRuntime.alerts[id].spawnAlerted = false;
                 localRuntime.alerts[id].lastSeenNextSpawn = null;
             }
+
+            pushSpawnLog(`${boss.name || '未知王'} 死亡時間改為 ${value}`);
         }
 
         function updateBoss(id, field, value) {
+            const boss = bosses[id];
             bossesRef.doc(id).update({
                 [field]: value,
                 lastUpdated: Date.now()
             }).catch(e => console.error('更新失敗', e));
+
+            if (boss && (field === 'respawnMinutes' || field === 'killTime')) {
+                const label = field === 'respawnMinutes' ? '重生間隔' : '擊殺用時';
+                pushSpawnLog(`${boss.name || '未知王'} ${label} 改為 ${value} 分鐘`);
+            }
         }
 
-        function pushSpawnLog(text) {
-            const list = localRuntime.spawnLog;
-            const now = new Date();
-            const hh = String(now.getHours()).padStart(2,'0');
-            const mm = String(now.getMinutes()).padStart(2,'0');
-            const entry = `${hh}:${mm}  ${text}`;
-            list.unshift(entry);
-            if (list.length > 10) list.pop();
-            const logEl = document.getElementById('eventLogList');
-            if (!logEl) return;
-            logEl.innerHTML = list.map(x => `<div class="event-log-item">${x}</div>`).join('');
+        function toggleAlert(id) {
+            const boss = bosses[id];
+            if (!boss) return;
+            const newVal = !(boss.notify ?? boss.alertEnabled ?? true);
+            bossesRef.doc(id).update({
+                notify: newVal,
+                lastUpdated: Date.now()
+            }).catch(e => console.error('切換提醒失敗', e));
         }
 
         async function killBoss(id) {
@@ -1153,38 +1158,35 @@
             if (!boss) return;
 
             const now = new Date();
-            const hhmm = now.getHours().toString().padStart(2,'0') + ':' +
-                         now.getMinutes().toString().padStart(2,'0');
+            const hh = String(now.getHours()).padStart(2,'0');
+            const mm = String(now.getMinutes()).padStart(2,'0');
+            const ss = String(now.getSeconds()).padStart(2,'0');
+            const timeStr = `${hh}:${mm}`;
 
             const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
             const killTime = boss.killTime || boss.killtime || 0;
             const baseMillis = now.getTime();
-
-            const updateData = {
-                deathTime: hhmm,
-                lastkill: Date.now(),
-                lastkill_source: 'manual',
-                lastUpdated: Date.now()
-            };
+            const nextSpawn = calcNextSpawnMillis(baseMillis, respawnMinutes, killTime);
 
             try {
-                await bossesRef.doc(id).update(updateData);
+                await bossesRef.doc(id).update({
+                    deathTime: timeStr,
+                    lastUpdated: now.getTime()
+                });
             } catch(e) {
-                console.error('擊殺更新失敗', e);
+                console.error('更新死亡時間失敗', e);
             }
 
             if (boss.name) {
-                const nextSpawn = calcNextSpawnMillis(baseMillis, respawnMinutes, killTime);
                 try {
                     await bossStateRef.doc(boss.name).set({
                         bossName: boss.name,
                         lastDeathTime: baseMillis,
-                        nextSpawn: nextSpawn,
+                        nextSpawn,
                         respawnMinutes,
                         killTime,
-                        updatedAt: Date.now()
+                        updatedAt: now.getTime()
                     }, { merge: true });
-
                     localRuntime.shared[boss.name] = {
                         lastDeathTime: baseMillis,
                         nextSpawn,
@@ -1192,7 +1194,7 @@
                         killTime
                     };
                 } catch(e) {
-                    console.error('更新共用 boss_state 失敗', e);
+                    console.error('更新共用狀態失敗', e);
                 }
             }
 
@@ -1202,277 +1204,201 @@
                 localRuntime.alerts[id].lastSeenNextSpawn = null;
             }
 
-            pushSpawnLog(`你擊殺 ${boss.name || '未知王'}`);
+            pushSpawnLog(`${boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 擊殺`);
         }
 
-        function toggleAlert(id) {
-            const current = bosses[id];
-            const enabled = !(current.notify ?? current.alertEnabled ?? true);
-            bossesRef.doc(id).update({
-                notify: enabled,
-                alertEnabled: enabled
-            }).catch(e => console.error('切換提醒失敗', e));
-        }
-
-        function deleteBoss(id) {
-            const name = bosses[id]?.name || '此王';
-            if (confirm(`確認刪除 ${name} ?`)) {
-                bossesRef.doc(id).delete().catch(e => console.error('刪除失敗', e));
+        async function deleteBoss(id) {
+            const boss = bosses[id];
+            if (!confirm(`確定要刪除「${boss?.name || '未知王'}」嗎？`)) return;
+            try {
+                await bossesRef.doc(id).delete();
+            } catch(e) {
+                console.error('刪除失敗', e);
             }
+        }
+
+        function playBeep(times = 1) {
+            if (!soundEnabled) return;
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                const now = audioCtx.currentTime;
+                for (let i = 0; i < times; i++) {
+                    const osc = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(880, now + i * 0.2);
+                    gainNode.gain.setValueAtTime(0, now + i * 0.2);
+                    gainNode.gain.linearRampToValueAtTime(0.2 * masterVol, now + i * 0.2 + 0.01);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, now + i * 0.2 + 0.18);
+                    osc.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    osc.start(now + i * 0.2);
+                    osc.stop(now + i * 0.2 + 0.2);
+                }
+            } catch(e) {}
+        }
+
+        function pushSpawnLog(text) {
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2,'0');
+            const mm = String(now.getMinutes()).padStart(2,'0');
+            const ss = String(now.getSeconds()).padStart(2,'0');
+            const line = `[${hh}:${mm}:${ss}] ${text}`;
+            localRuntime.spawnLog.unshift(line);
+            localRuntime.spawnLog = localRuntime.spawnLog.slice(0, 50);
+
+            const listEl = document.getElementById('eventLogList');
+            if (!listEl) return;
+            listEl.innerHTML = localRuntime.spawnLog.map(item =>
+                `<div class="event-log-item">${item}</div>`
+            ).join('');
         }
 
         function updateGlobalCountdown() {
             const lastLine = document.getElementById('lastSpawnLine');
             const nextLine = document.getElementById('nextSpawnLine');
+            if (!lastLine || !nextLine) return;
 
-            if (localRuntime.lastSpawnEvent) {
-                const t = new Date(localRuntime.lastSpawnEvent.time);
-                const hh = String(t.getHours()).padStart(2,'0');
-                const mm = String(t.getMinutes()).padStart(2,'0');
-                const ss = String(t.getSeconds()).padStart(2,'0');
-                lastLine.textContent = `${localRuntime.lastSpawnEvent.name} 已重生（${hh}:${mm}:${ss}）`;
-            } else {
-                lastLine.textContent = '尚無重生紀錄';
-            }
-
-            const now = Date.now();
-            let best = null;
-
-            Object.values(bosses).forEach(boss => {
-                const futures = predictNextSpawns(boss);
-                if (!futures.length) return;
-                const diff = futures[0] - now;
-                if (best == null || diff < best.diff) {
-                    best = { boss, nextTime: futures[0], diff };
-                }
-            });
-
-            if (!best) {
+            if (!Object.keys(bosses).length) {
+                lastLine.textContent = '尚未新增王';
                 nextLine.textContent = '所有王已重生';
                 return;
             }
 
-            if (best.diff <= 0) {
-                nextLine.textContent = `${best.boss.name || '未知王'} 已重生`;
+            const now = Date.now();
+            let nearestSpawn = null;
+
+            Object.values(bosses).forEach(boss => {
+                const futures = predictNextSpawns(boss);
+                if (!futures.length) return;
+                const first = futures[0];
+                if (first < now) return;
+                if (!nearestSpawn || first < nearestSpawn.time) {
+                    nearestSpawn = { name: boss.name || '未知王', time: first };
+                }
+            });
+
+            if (!nearestSpawn) {
+                lastLine.textContent = localRuntime.lastSpawnEvent
+                    ? `${localRuntime.lastSpawnEvent.name} 已於 ${new Date(localRuntime.lastSpawnEvent.time).toLocaleTimeString('zh-TW',{hour12:false})} 重生`
+                    : '尚無重生紀錄';
+                nextLine.textContent = '所有王已重生';
                 return;
             }
 
-            const totalSec = Math.floor(best.diff / 1000);
-            const h = Math.floor(totalSec / 3600);
-            const m = Math.floor((totalSec % 3600) / 60);
-            const s = totalSec % 60;
-            const hh = String(h).padStart(2,'0');
-            const mm = String(m).padStart(2,'0');
-            const ss = String(s).padStart(2,'0');
-            nextLine.textContent = `${best.boss.name || '未知王'} 倒數 ${hh}:${mm}:${ss}`;
+            const diff = nearestSpawn.time - now;
+            const sec = Math.floor(diff / 1000);
+            const hh = String(Math.floor(sec / 3600)).padStart(2,'0');
+            const mm = String(Math.floor((sec % 3600) / 60)).padStart(2,'0');
+            const ss = String(sec % 60).padStart(2,'0');
+
+            lastLine.textContent = localRuntime.lastSpawnEvent
+                ? `${localRuntime.lastSpawnEvent.name} 已於 ${new Date(localRuntime.lastSpawnEvent.time).toLocaleTimeString('zh-TW',{hour12:false})} 重生`
+                : '尚無重生紀錄';
+            nextLine.textContent = `${nearestSpawn.name} 倒數 ${hh}:${mm}:${ss}`;
         }
 
-        function play3MinAlert() {
-            if (!soundEnabled) return;
-            playBeep(3);
-        }
+        function checkBossAlerts() {
+            const now = Date.now();
+            Object.values(bosses).forEach(boss => {
+                const futures = predictNextSpawns(boss);
+                if (!futures.length) return;
 
-        function playSpawnAlert() {
-            if (!soundEnabled) return;
-            playBeep(6);
-        }
+                const nextSpawn = futures[0];
+                const alertState = localRuntime.alerts[boss.id] || { threeMinAlerted:false, spawnAlerted:false, lastSeenNextSpawn:null };
+                localRuntime.alerts[boss.id] = alertState;
 
-        function markCardJustSpawned(bossId) {
-            const card = document.querySelector(`.boss-card[data-boss-id="${bossId}"]`);
-            if (!card) return;
-            card.classList.add('just-spawned');
-            setTimeout(() => {
-                card.classList.remove('just-spawned');
-            }, 60000);
-        }
+                if (alertState.lastSeenNextSpawn !== nextSpawn) {
+                    alertState.threeMinAlerted = false;
+                    alertState.spawnAlerted = false;
+                    alertState.lastSeenNextSpawn = nextSpawn;
+                }
 
-        function setRecentSpawn(name, timeMillis) {
-            localRuntime.lastSpawnEvent = { name, time: timeMillis };
-            refreshRecentSpawnBar();
+                const diff = nextSpawn - now;
+                const notify = boss.notify ?? boss.alertEnabled ?? true;
+                if (!notify) return;
+
+                if (diff <= 3 * 60 * 1000 && diff > 0 && !alertState.threeMinAlerted) {
+                    alertState.threeMinAlerted = true;
+                    playBeep(3);
+                    pushSpawnLog(`${boss.name || '未知王'} 即將在 3 分鐘內重生`);
+                }
+
+                if (diff <= 0 && !alertState.spawnAlerted) {
+                    alertState.spawnAlerted = true;
+                    playBeep(4);
+                    const t = new Date(nextSpawn);
+                    const hh = String(t.getHours()).padStart(2,'0');
+                    const mm = String(t.getMinutes()).padStart(2,'0');
+                    const ss = String(t.getSeconds()).padStart(2,'0');
+                    localRuntime.lastSpawnEvent = { name: boss.name || '未知王', time: nextSpawn };
+                    pushSpawnLog(`${boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 重生`);
+                    flashRecentSpawnBar(`${boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 重生`);
+                }
+            });
         }
 
         function refreshRecentSpawnBar() {
             const bar = document.getElementById('recentSpawnBar');
             const textEl = document.getElementById('recentSpawnText');
             if (!bar || !textEl) return;
-
-            const ev = localRuntime.lastSpawnEvent;
-            if (!ev) {
+            if (!localRuntime.lastSpawnEvent) {
                 bar.style.display = 'none';
                 return;
             }
-            const now = Date.now();
-            const diff = now - ev.time;
-            const sec = Math.floor(diff / 1000);
-            textEl.textContent = `${ev.name}（${sec} 秒前）`;
+            const t = new Date(localRuntime.lastSpawnEvent.time);
+            const hh = String(t.getHours()).padStart(2,'0');
+            const mm = String(t.getMinutes()).padStart(2,'0');
+            const ss = String(t.getSeconds()).padStart(2,'0');
+            textEl.textContent = `${localRuntime.lastSpawnEvent.name} 已於 ${hh}:${mm}:${ss} 重生`;
+            bar.style.display = 'flex';
+        }
+
+        function flashRecentSpawnBar(msg) {
+            const bar = document.getElementById('recentSpawnBar');
+            const textEl = document.getElementById('recentSpawnText');
+            if (!bar || !textEl) return;
+            textEl.textContent = msg;
             bar.style.display = 'flex';
             bar.classList.remove('recent-spawn-fade');
+            void bar.offsetWidth;
+            setTimeout(()=>bar.classList.add('recent-spawn-fade'), 4000);
         }
 
-        function checkBossAlerts() {
-            const now = Date.now();
-            const THREE_MIN = 3 * 60 * 1000;
-
-            Object.values(bosses).forEach(boss => {
-                if (!(boss.notify ?? boss.alertEnabled ?? true)) return;
-
-                const futures = predictNextSpawns(boss);
-                if (!futures.length) return;
-                const nextSpawn = futures[0];
-                const diff = nextSpawn - now;
-
-                const alertState = localRuntime.alerts[boss.id] ||
-                    { threeMinAlerted:false, spawnAlerted:false, lastSeenNextSpawn:null };
-                if (!localRuntime.alerts[boss.id]) {
-                    localRuntime.alerts[boss.id] = alertState;
-                }
-
-                // 三分鐘提醒
-                if (diff <= THREE_MIN && diff > 0 && !alertState.threeMinAlerted) {
-                    play3MinAlert();
-                    alertState.threeMinAlerted = true;
-                }
-
-                // 每輪重生觸發一次：偵測 nextSpawn 從未到達 -> 已經小於等於現在
-                if ((!alertState.spawnAlerted || alertState.lastSeenNextSpawn === null) &&
-                    diff <= 0 &&
-                    (alertState.lastSeenNextSpawn === null || alertState.lastSeenNextSpawn > now)) {
-
-                    playSpawnAlert();
-                    alertState.spawnAlerted = true;
-                    alertState.lastSeenNextSpawn = nextSpawn;
-
-                    const name = boss.name || '';
-                    setRecentSpawn(name, now);
-
-                    if (diff > -5000) {
-                        pushSpawnLog(`${name} 重生`);
-                    } else {
-                        pushSpawnLog(`${name} 重生（延遲）`);
-                    }
-                    markCardJustSpawned(boss.id);
-                }
-
-                // 下一輪前重置 spawnAlerted，讓下一輪可以再觸發
-                if (diff > 0 && alertState.spawnAlerted) {
-                    alertState.spawnAlerted = false;
-                    alertState.lastSeenNextSpawn = nextSpawn;
-                }
-            });
+        function openAddModal() {
+            document.getElementById('addModal').style.display = 'block';
         }
 
-        (function(){
-            let inited = false;
-
-            function ensureAudio(){
-                if(!audioCtx){
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                if(audioCtx && audioCtx.state === "suspended"){
-                    audioCtx.resume();
-                }
-            }
-
-            if(!inited){
-                ["click","keydown","touchstart"].forEach(evt=>{
-                    window.addEventListener(evt, ensureAudio, { once:true });
-                });
-                inited = true;
-            }
-
-            window.playBeep = function(times){
-                ensureAudio();
-                if(!audioCtx) return;
-                if(typeof masterVol !== "number") masterVol = 0.8;
-                if (masterVol <= 0) return;
-
-                for(let i=0;i<times;i++){
-                    const o = audioCtx.createOscillator();
-                    const g = audioCtx.createGain();
-                    o.type = "square";
-                    o.frequency.value = 880;
-                    g.gain.value = masterVol;
-                    o.connect(g); g.connect(audioCtx.destination);
-                    const t = audioCtx.currentTime + i * 0.25;
-                    o.start(t);
-                    o.stop(t + 0.15);
-                }
-            };
-        })();
-
-        function openAddModal() { document.getElementById('addModal').style.display = 'block'; }
-        function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
+        function closeAddModal() {
+            document.getElementById('addModal').style.display = 'none';
+        }
 
         async function addNewBoss() {
             const name = document.getElementById('newBossName').value.trim();
-            let respawnMinutes = parseInt(document.getElementById('newRespawnMinutes').value || '180', 10);
-            let killTime = parseInt(document.getElementById('newKillTime').value || '2', 10);
-
+            const respawnMinutes = parseInt(document.getElementById('newRespawnMinutes').value || '180', 10);
+            const killTime = parseInt(document.getElementById('newKillTime').value || '2', 10);
             if (!name) {
                 alert('請輸入王名稱');
                 return;
             }
-
-            if (isNaN(respawnMinutes) || respawnMinutes <= 0) respawnMinutes = 180;
-            if (isNaN(killTime) || killTime < 0) killTime = 2;
-
             try {
-                let shared = null;
-                try {
-                    const stateSnap = await bossStateRef.doc(name).get();
-                    if (stateSnap.exists) {
-                        const sd = stateSnap.data();
-                        shared = {
-                            lastDeathTime: sd.lastDeathTime || null,
-                            nextSpawn: sd.nextSpawn || null,
-                            respawnMinutes: sd.respawnMinutes || respawnMinutes,
-                            killTime: sd.killTime || killTime
-                        };
-                        localRuntime.shared[name] = shared;
-                    }
-                } catch(e) {
-                    console.error('讀取共用狀態失敗（可忽略）', e);
-                }
-
-                const snap = await templatesRef.where('name','==',name).limit(1).get();
-                if (snap.empty) {
-                    await templatesRef.add({
-                        name,
-                        respawnMinutes,
-                        killTime,
-                        createdAt: Date.now()
-                    });
-                }
-
-                const bossDoc = {
+                await bossesRef.add({
                     ownerId: OWNER_ID,
-                    name: name,
-                    respawn: respawnMinutes,
-                    respawnMinutes: respawnMinutes,
-                    killTime: killTime,
-                    deathTime: '',
+                    name,
+                    respawnMinutes,
+                    killTime,
                     notify: true,
-                    alertEnabled: true,
+                    createdAt: Date.now(),
                     lastUpdated: Date.now()
-                };
-
-                await bossesRef.add(bossDoc);
-
+                });
                 document.getElementById('newBossName').value = '';
-                document.getElementById('newRespawnMinutes').value = '180';
-                document.getElementById('newKillTime').value = '2';
                 closeAddModal();
-
-            } catch (e) {
-                console.error('新增失敗', e);
-                alert('新增失敗：' + e.message);
+            } catch(e) {
+                console.error('新增王失敗', e);
             }
         }
-
-        window.onclick = function(e) {
-            const modal = document.getElementById('addModal');
-            if (e.target === modal) closeAddModal();
-        };
 
         window.addEventListener('load', init);
     </script>
