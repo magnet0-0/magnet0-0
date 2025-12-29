@@ -994,7 +994,6 @@
             const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
             const killTime = boss.killTime || boss.killtime || 0;
             const alertEnabled = boss.notify ?? boss.alertEnabled ?? true;
-
             const futures = predictNextSpawns(boss);
             let subText = '待擊殺';
             if (futures.length > 0) {
