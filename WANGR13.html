@@ -687,7 +687,8 @@
             alerts: {},
             shared: {},
             spawnLog: [],
-            initialScanDone: false
+            initialScanDone: false,
+            lastHeaderMsg: null
         };
 
         function parseTimeToTodayMillis(timeStr) {
@@ -744,51 +745,7 @@
 
                     if (!localRuntime.initialScanDone) {
                         localRuntime.initialScanDone = true;
-                        const now = Date.now();
-                        const todayStart = new Date();
-                        todayStart.setHours(0,0,0,0);
-                        const todayStartMs = todayStart.getTime();
-
-                        let latest = null;
-
-                        Object.values(bosses).forEach(boss => {
-                            const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
-                            const killTime = boss.killTime || boss.killtime || 0;
-                            if (!respawnMinutes && !killTime) return;
-
-                            const shared = localRuntime.shared[boss.name] || null;
-                            let baseMillis = null;
-                            if (shared && shared.lastDeathTime) {
-                                baseMillis = shared.lastDeathTime;
-                            } else if (boss.deathTime) {
-                                baseMillis = parseTimeToTodayMillis(boss.deathTime);
-                            }
-                            if (!baseMillis) return;
-
-                            const step = (respawnMinutes + killTime) * 60000;
-                            if (step <= 0) return;
-
-                            let k = Math.floor((now - baseMillis) / step);
-                            if (k < 0) return;
-
-                            const lastSpawn = baseMillis + k * step;
-                            if (lastSpawn < todayStartMs || lastSpawn > now) return;
-
-                            if (!latest || lastSpawn > latest.time) {
-                                latest = {
-                                    name: boss.name || '未知王',
-                                    time: lastSpawn
-                                };
-                            }
-                        });
-
-                        if (latest) {
-                            const t = new Date(latest.time);
-                            const hh = String(t.getHours()).padStart(2,'0');
-                            const mm = String(t.getMinutes()).padStart(2,'0');
-                            const ss = String(t.getSeconds()).padStart(2,'0');
-                            setLastSpawnMessage(`${latest.name} 已於 ${hh}:${mm}:${ss} 重生`);
-                        }
+                        refreshLastSpawnLine();
                     }
                 }, (err) => {
                     console.error('載入 bosses 發生錯誤：', err);
@@ -1114,7 +1071,7 @@
                     await bossStateRef.doc(boss.name).set({
                         bossName: boss.name,
                         lastDeathTime: baseMillis,
-                        nextSpawn: nextSpawn,
+                        nextSpawn,
                         respawnMinutes,
                         killTime,
                         updatedAt: Date.now()
@@ -1137,6 +1094,7 @@
             }
 
             pushSpawnLog(`[調整] ${boss.name || '未知王'} 死亡時間改為 ${value}`);
+            refreshLastSpawnLine();
         }
 
         function updateBoss(id, field, value) {
@@ -1213,7 +1171,9 @@
                 localRuntime.alerts[id].lastSeenNextSpawn = null;
             }
 
-            pushSpawnLog(`${boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 擊殺`);
+            const msg = `${boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 擊殺`;
+            pushSpawnLog(msg);
+            setLastSpawnMessage(msg);
         }
 
         async function deleteBoss(id) {
@@ -1284,7 +1244,10 @@
                 barText.textContent = msg;
                 bar.style.display = 'flex';
             }
-            pushSpawnLog(msg);
+            if (!localRuntime.lastHeaderMsg || localRuntime.lastHeaderMsg !== msg) {
+                localRuntime.lastHeaderMsg = msg;
+                pushSpawnLog(msg);
+            }
         }
 
         function updateGlobalCountdown() {
@@ -1315,7 +1278,6 @@
                 const mm = String(dt.getMinutes()).padStart(2,'0');
                 const ss = String(dt.getSeconds()).padStart(2,'0');
                 const msg = `${best.boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 重生`;
-                setLastSpawnMessage(msg);
                 nextLine.textContent = msg;
                 return;
             }
@@ -1329,7 +1291,6 @@
 
         function checkBossAlerts() {
             const now = Date.now();
-
             Object.values(bosses).forEach(boss => {
                 const id = boss.id;
                 const alertState = localRuntime.alerts[id] || {
@@ -1353,20 +1314,7 @@
                     alertState.lastSeenNextSpawn = nextSpawn;
                 }
 
-                // 三分鐘前：更新第一行＋最近事件＋兩聲鈴
-                if (!alertState.threeMinAlerted && diff <= 3 * 60 * 1000 && diff > 0) {
-                    alertState.threeMinAlerted = true;
-                    const dt = new Date(nextSpawn);
-                    const hh = String(dt.getHours()).padStart(2,'0');
-                    const mm = String(dt.getMinutes()).padStart(2,'0');
-                    const ss = String(dt.getSeconds()).padStart(2,'0');
-                    const msg = `${boss.name || '未知王'} 三分鐘後重生 (預計 ${hh}:${mm}:${ss})`;
-                    setLastSpawnMessage(msg);
-                    addEventLog(msg);
-                    playBeep(2);
-                }
-
-                // 重生瞬間：更新第一行＋最近事件＋三聲鈴
+                // 只保留實際重生提醒
                 if (!alertState.spawnAlerted && diff <= 0 && diff > -30 * 1000) {
                     alertState.spawnAlerted = true;
                     const dt = new Date(nextSpawn);
@@ -1384,6 +1332,56 @@
                     }
                 }
             });
+        }
+
+        function refreshLastSpawnLine() {
+            const now = Date.now();
+            const todayStart = new Date();
+            todayStart.setHours(0,0,0,0);
+            const todayStartMs = todayStart.getTime();
+
+            let latest = null;
+
+            Object.values(bosses).forEach(boss => {
+                const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
+                const killTime = boss.killTime || boss.killtime || 0;
+                if (!respawnMinutes && !killTime) return;
+
+                const shared = localRuntime.shared[boss.name] || null;
+                let baseMillis = null;
+                if (shared && shared.lastDeathTime) {
+                    baseMillis = shared.lastDeathTime;
+                } else if (boss.deathTime) {
+                    baseMillis = parseTimeToTodayMillis(boss.deathTime);
+                }
+                if (!baseMillis) return;
+
+                const step = (respawnMinutes + killTime) * 60000;
+                if (step <= 0) return;
+
+                let k = Math.floor((now - baseMillis) / step);
+                if (k < 0) return;
+
+                const lastSpawn = baseMillis + k * step;
+                if (lastSpawn < todayStartMs || lastSpawn > now) return;
+
+                if (!latest || lastSpawn > latest.time) {
+                    latest = {
+                        name: boss.name || '未知王',
+                        time: lastSpawn
+                    };
+                }
+            });
+
+            if (latest) {
+                const t = new Date(latest.time);
+                const hh = String(t.getHours()).padStart(2,'0');
+                const mm = String(t.getMinutes()).padStart(2,'0');
+                const ss = String(t.getSeconds()).padStart(2,'0');
+                setLastSpawnMessage(`${latest.name} 已於 ${hh}:${mm}:${ss} 重生`);
+            } else {
+                setLastSpawnMessage('尚無重生紀錄');
+            }
         }
 
         function openAddModal() {
