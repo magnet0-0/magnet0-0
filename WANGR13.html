@@ -1353,13 +1353,20 @@
                     alertState.lastSeenNextSpawn = nextSpawn;
                 }
 
+                // 三分鐘前：更新第一行＋最近事件＋兩聲鈴
                 if (!alertState.threeMinAlerted && diff <= 3 * 60 * 1000 && diff > 0) {
                     alertState.threeMinAlerted = true;
-                    const msg = `${boss.name || '未知王'} 三分鐘後重生`;
+                    const dt = new Date(nextSpawn);
+                    const hh = String(dt.getHours()).padStart(2,'0');
+                    const mm = String(dt.getMinutes()).padStart(2,'0');
+                    const ss = String(dt.getSeconds()).padStart(2,'0');
+                    const msg = `${boss.name || '未知王'} 三分鐘後重生 (預計 ${hh}:${mm}:${ss})`;
+                    setLastSpawnMessage(msg);
                     addEventLog(msg);
                     playBeep(2);
                 }
 
+                // 重生瞬間：更新第一行＋最近事件＋三聲鈴
                 if (!alertState.spawnAlerted && diff <= 0 && diff > -30 * 1000) {
                     alertState.spawnAlerted = true;
                     const dt = new Date(nextSpawn);
