@@ -794,6 +794,19 @@
                     console.error('載入 bosses 發生錯誤：', err);
                     document.getElementById('searchStatus').textContent = '讀取錯誤';
                 });
+
+            bossStateRef.where('ownerId','==',OWNER_ID)
+                .onSnapshot((snap) => {
+                    const shared = {};
+                    snap.forEach(doc => {
+                        const data = doc.data();
+                        if (!data.bossName) return;
+                        shared[data.bossName] = data;
+                    });
+                    localRuntime.shared = shared;
+                }, (err) => {
+                    console.error('同步 boss_state 錯誤', err);
+                });
         }
 
         function setupSearch() {
@@ -1234,6 +1247,22 @@
             } catch(e) {}
         }
 
+        function addEventLog(msg) {
+            const list = document.getElementById('eventLogList');
+            if (!list) return;
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2,'0');
+            const mm = String(now.getMinutes()).padStart(2,'0');
+            const ss = String(now.getSeconds()).padStart(2,'0');
+            const div = document.createElement('div');
+            div.className = 'event-log-item';
+            div.textContent = `[${hh}:${mm}:${ss}] ${msg}`;
+            list.prepend(div);
+            while (list.children.length > 30) {
+                list.removeChild(list.lastChild);
+            }
+        }
+
         function pushSpawnLog(line) {
             localRuntime.spawnLog.unshift(line);
             localRuntime.spawnLog = localRuntime.spawnLog.slice(0, 50);
@@ -1287,6 +1316,7 @@
                 const mm = String(dt.getMinutes()).padStart(2,'0');
                 const ss = String(dt.getSeconds()).padStart(2,'0');
                 const msg = `${best.boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 重生`;
+                setLastSpawnMessage(msg);     // 這裡會同步第一行＋最近事件
                 nextLine.textContent = msg;
                 return;
             }
@@ -1338,7 +1368,7 @@
                     const mm = String(t.getMinutes()).padStart(2,'0');
                     const ss = String(t.getSeconds()).padStart(2,'0');
                     const msg = `${boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 重生`;
-                    setLastSpawnMessage(msg);
+                    setLastSpawnMessage(msg);  // 自動重生也會寫入
                 }
             });
         }
