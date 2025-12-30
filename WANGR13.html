@@ -212,11 +212,6 @@
         .recent-spawn-label { color:#82ffe4;font-weight:600; }
         .recent-spawn-text { color:#e5f7ff; }
 
-        .recent-spawn-fade {
-            opacity: 0;
-            transition: opacity 0.6s ease-out;
-        }
-
         .boss-cards {
             max-width: 1240px;
             margin: 132px auto 40px;
@@ -687,8 +682,7 @@
             alerts: {},
             shared: {},
             spawnLog: [],
-            initialScanDone: false,
-            lastHeaderMsg: null
+            initialScanDone: false
         };
 
         function parseTimeToTodayMillis(timeStr) {
@@ -1244,12 +1238,10 @@
                 barText.textContent = msg;
                 bar.style.display = 'flex';
             }
-            if (!localRuntime.lastHeaderMsg || localRuntime.lastHeaderMsg !== msg) {
-                localRuntime.lastHeaderMsg = msg;
-                pushSpawnLog(msg);
-            }
+            pushSpawnLog(msg);
         }
 
+        // ★ 唯一改動：倒數 <= 0 時，同步更新第一行 / 最近事件
         function updateGlobalCountdown() {
             const nextLine = document.getElementById('nextSpawnLine');
             if (!nextLine) return;
@@ -1278,7 +1270,10 @@
                 const mm = String(dt.getMinutes()).padStart(2,'0');
                 const ss = String(dt.getSeconds()).padStart(2,'0');
                 const msg = `${best.boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 重生`;
-                nextLine.textContent = msg;
+
+                nextLine.textContent = msg;   // 第二行顯示這句
+                setLastSpawnMessage(msg);     // 第一行＋最近事件記住這次重生
+
                 return;
             }
 
@@ -1314,7 +1309,18 @@
                     alertState.lastSeenNextSpawn = nextSpawn;
                 }
 
-                // 只保留實際重生提醒
+                if (!alertState.threeMinAlerted && diff <= 3 * 60 * 1000 && diff > 0) {
+                    alertState.threeMinAlerted = true;
+                    const dt = new Date(nextSpawn);
+                    const hh = String(dt.getHours()).padStart(2,'0');
+                    const mm = String(dt.getMinutes()).padStart(2,'0');
+                    const ss = String(dt.getSeconds()).padStart(2,'0');
+                    const msg = `${boss.name || '未知王'} 三分鐘後重生 (預計 ${hh}:${mm}:${ss})`;
+                    setLastSpawnMessage(msg);
+                    addEventLog(msg);
+                    playBeep(2);
+                }
+
                 if (!alertState.spawnAlerted && diff <= 0 && diff > -30 * 1000) {
                     alertState.spawnAlerted = true;
                     const dt = new Date(nextSpawn);
