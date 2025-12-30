@@ -1241,7 +1241,7 @@
             pushSpawnLog(msg);
         }
 
-        // ★ 第一處：倒數到 0 時，同步更新第一行
+        // ★ 唯一改動：倒數 <= 0 時，同步更新第一行 / 最近事件
         function updateGlobalCountdown() {
             const nextLine = document.getElementById('nextSpawnLine');
             if (!nextLine) return;
@@ -1271,8 +1271,8 @@
                 const ss = String(dt.getSeconds()).padStart(2,'0');
                 const msg = `${best.boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 重生`;
 
-                nextLine.textContent = msg;
-                setLastSpawnMessage(msg);   // 最近一次重生，秒更新
+                nextLine.textContent = msg;   // 第二行顯示這句
+                setLastSpawnMessage(msg);     // 第一行＋最近事件記住這次重生
 
                 return;
             }
@@ -1284,7 +1284,6 @@
             nextLine.textContent = `${best.boss.name || '未知王'} 倒數 ${h}:${m}:${s}`;
         }
 
-        // ★ 第二處：三分鐘前提醒不再動第一行，只動事件＋聲音；實際重生仍會覆蓋第一行
         function checkBossAlerts() {
             const now = Date.now();
             Object.values(bosses).forEach(boss => {
@@ -1310,7 +1309,6 @@
                     alertState.lastSeenNextSpawn = nextSpawn;
                 }
 
-                // 3 分鐘前：不要動第一行
                 if (!alertState.threeMinAlerted && diff <= 3 * 60 * 1000 && diff > 0) {
                     alertState.threeMinAlerted = true;
                     const dt = new Date(nextSpawn);
@@ -1318,11 +1316,11 @@
                     const mm = String(dt.getMinutes()).padStart(2,'0');
                     const ss = String(dt.getSeconds()).padStart(2,'0');
                     const msg = `${boss.name || '未知王'} 三分鐘後重生 (預計 ${hh}:${mm}:${ss})`;
+                    setLastSpawnMessage(msg);
                     addEventLog(msg);
                     playBeep(2);
                 }
 
-                // 實際重生：仍然更新第一行為「當下最近的一隻」
                 if (!alertState.spawnAlerted && diff <= 0 && diff > -30 * 1000) {
                     alertState.spawnAlerted = true;
                     const dt = new Date(nextSpawn);
