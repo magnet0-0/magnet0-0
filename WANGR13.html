@@ -700,6 +700,7 @@
             return d.getTime();
         }
 
+        // 自動滾動用：重生 + 擊殺
         function calcNextSpawnMillis(baseMillis, respawnMinutes, killTime) {
             if (baseMillis == null) return null;
             const respawnMs = (respawnMinutes ?? 60) * 60000;
@@ -712,6 +713,19 @@
             const passed = now - baseMillis;
             const k = Math.floor(passed / step);
             return baseMillis + (k + 1) * step;
+        }
+
+        // 人為起點用：只加重生，不加擊殺
+        function calcNextSpawnManual(baseMillis, respawnMinutes) {
+            if (baseMillis == null) return null;
+            const respawnMs = (respawnMinutes ?? 60) * 60000;
+            const now = Date.now();
+            const firstSpawn = baseMillis + respawnMs;
+            if (firstSpawn > now) return firstSpawn;
+
+            const passed = now - baseMillis;
+            const k = Math.floor(passed / respawnMs);
+            return baseMillis + (k + 1) * respawnMs;
         }
 
         function init() {
@@ -891,6 +905,7 @@
             return localRuntime.shared[name] || null;
         }
 
+        // 仍用「重生 + 擊殺」的週期算未來 4 次，配合你自動滾動規則
         function predictNextSpawns(boss) {
             const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
             const killTime = boss.killTime || boss.killtime || 0;
@@ -994,7 +1009,6 @@
                                 </button>
                             </div>
                         </div>
-
                         <div class="input-group" style="margin-top:6px;">
                             <label>⏰ 重生間隔(分)</label>
                             <input type="number" min="1" value="${respawnMinutes}"
@@ -1034,6 +1048,7 @@
             });
         }
 
+        // 手動套用：下一次用「手動時間 + 重生」，不加擊殺耗時
         async function applyDeathTime(id) {
             const boss = bosses[id];
             if (!boss) return;
@@ -1060,10 +1075,12 @@
             }
 
             if (boss.name) {
-                const nextSpawn = calcNextSpawnMillis(baseMillis, respawnMinutes, killTime);
+                // 人為：只加重生
+                const nextSpawn = calcNextSpawnManual(baseMillis, respawnMinutes);
                 try {
                     await bossStateRef.doc(boss.name).set({
                         bossName: boss.name,
+                        ownerId: OWNER_ID,
                         lastDeathTime: baseMillis,
                         nextSpawn,
                         respawnMinutes,
@@ -1114,6 +1131,7 @@
             }).catch(e => console.error('切換提醒失敗', e));
         }
 
+        // 擊殺：下一次用「擊殺時間 + 重生」，不加擊殺耗時
         async function killBoss(id) {
             const boss = bosses[id];
             if (!boss) return;
@@ -1127,7 +1145,6 @@
             const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
             const killTime = boss.killTime || boss.killtime || 0;
             const baseMillis = now.getTime();
-            const nextSpawn = calcNextSpawnMillis(baseMillis, respawnMinutes, killTime);
 
             try {
                 await bossesRef.doc(id).update({
@@ -1139,9 +1156,12 @@
             }
 
             if (boss.name) {
+                // 人為起點：只加重生
+                const nextSpawn = calcNextSpawnManual(baseMillis, respawnMinutes);
                 try {
                     await bossStateRef.doc(boss.name).set({
                         bossName: boss.name,
+                        ownerId: OWNER_ID,
                         lastDeathTime: baseMillis,
                         nextSpawn,
                         respawnMinutes,
@@ -1241,7 +1261,7 @@
             pushSpawnLog(msg);
         }
 
-        // ★ 唯一改動：倒數 <= 0 時，同步更新第一行 / 最近事件
+        // 第二行倒數 + 0 秒時寫入最近重生
         function updateGlobalCountdown() {
             const nextLine = document.getElementById('nextSpawnLine');
             if (!nextLine) return;
@@ -1271,8 +1291,8 @@
                 const ss = String(dt.getSeconds()).padStart(2,'0');
                 const msg = `${best.boss.name || '未知王'} 已於 ${hh}:${mm}:${ss} 重生`;
 
-                nextLine.textContent = msg;   // 第二行顯示這句
-                setLastSpawnMessage(msg);     // 第一行＋最近事件記住這次重生
+                nextLine.textContent = msg;
+                setLastSpawnMessage(msg);
 
                 return;
             }
