@@ -722,7 +722,6 @@
             const now = Date.now();
             const firstSpawn = baseMillis + respawnMs;
             if (firstSpawn > now) return firstSpawn;
-
             const passed = now - baseMillis;
             const k = Math.floor(passed / respawnMs);
             return baseMillis + (k + 1) * respawnMs;
@@ -905,7 +904,7 @@
             return localRuntime.shared[name] || null;
         }
 
-        // 仍用「重生 + 擊殺」的週期算未來 4 次，配合你自動滾動規則
+        // 仍用「重生 + 擊殺」的週期算未來 4 次，配合自動滾動
         function predictNextSpawns(boss) {
             const respawnMinutes = boss.respawnMinutes ?? boss.respawn ?? 60;
             const killTime = boss.killTime || boss.killtime || 0;
@@ -920,12 +919,12 @@
                 return [];
             }
 
-            const firstSpawn = calcNextSpawnMillis(baseMillis, respawnMinutes, killTime);
+            const firstSpawn = calcNextSpawnManual(baseMillis, respawnMinutes); // 下一次 + 未來第一次不加擊殺耗時
             if (!firstSpawn) return [];
 
             const respawnMs = respawnMinutes * 60000;
             const killMs = killTime * 60000;
-            const step = respawnMs + killMs;
+            const step = respawnMs + killMs; // 第二輪起開始用重生 + 擊殺
 
             return [
                 firstSpawn,
@@ -979,7 +978,6 @@
                         <div class="boss-name">${boss.name || '未知王'}</div>
                         <div class="boss-sub" data-boss-id="${id}">${subText}</div>
                     </div>
-
                     <div class="boss-actions">
                         <div class="toggle-container">
                             <span class="toggle-label">${alertEnabled ? '提醒中' : '不提醒'}</span>
